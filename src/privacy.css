@@ -1,0 +1,95 @@
+/* ============================================================
+   PRIVACY ENGINE — explicit Show/Hide masking (no hover peeking)
+   Every Amount (maskable) renders BOTH layers stacked in normal flow:
+   - .amt-real  (ink number, invisible while masked)
+   - .amt-mask  (•••• patch, sits on top)
+   <html data-privacy="on|hidden"> crossfades between them in CSS only.
+
+   The state changes ONLY through the explicit Show/Hide balance button
+   on the Dashboard. No hover zones, no touch timers.
+   ============================================================ */
+
+/* The real value layer: hidden by default, fades in when revealed */
+.amt-real {
+  opacity: 0;
+  transition: opacity 0.16s var(--ease-out-expo);
+}
+
+/* The mask layer sits exactly on top, same metrics → zero shift */
+.amt-mask {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  pointer-events: none;
+  opacity: 1;
+  transition: opacity 0.12s var(--ease-out-expo);
+}
+
+/* Ink-value wrappers reserve identical box so mask aligns */
+.amt-wrap {
+  position: relative;
+  display: inline-block;
+}
+
+/* ---------- REVEALED STATE — driven by html[data-privacy] only ----------
+   The Dashboard toggle writes html[data-privacy='on'|'hidden']; both spans
+   live in normal flow, so one attribute crossfades them with zero shift.
+   (The old :not(.amt-revealed) selectors matched through html/body and
+   pinned the real layer to opacity 0 — removed.) */
+.amt-real { opacity: 1; }
+.amt-mask { opacity: 0; }
+
+html[data-privacy='hidden'] .amt-wrap .amt-real { opacity: 0; }
+html[data-privacy='hidden'] .amt-wrap .amt-mask { opacity: 1; }
+@keyframes amt-pop {
+  0% { transform: scale(0.985); }
+  100% { transform: scale(1); }
+}
+
+/* Mask styling: chunky rounded ink dots, colour-reactive to theme */
+.amt-dots {
+  display: inline-block;
+  letter-spacing: 0.5px;
+  max-width: 100%;
+  overflow: hidden; /* dot glyph widths drift from the real digits' box — never let them spill onto neighbours */
+  white-space: nowrap;
+  font-weight: 800;
+  color: var(--mask-ink);
+  filter: saturate(0.75) opacity(0.85);
+  font-family: var(--font-sans);
+  user-select: none;
+}
+
+/* ---------- PEEK LOCK REMOVED — no hover zones exist anymore ---------- */
+
+/* ---------- SHOW/HIDE BALANCE BUTTON (Dashboard) ----------
+   Clear labelled control beside the balance; keyboard accessible. */
+.privacy-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 16px;
+  border-radius: 999px;
+  border: 2px solid var(--sticker-border);
+  background: var(--surface);
+  color: var(--text);
+  font-weight: 800;
+  font-size: 13px;
+  cursor: pointer;
+  box-shadow: 2.5px 3px 0 var(--sticker-shadow);
+  transition: background 0.2s, transform 0.18s var(--ease-spring), box-shadow 0.2s, border-color 0.2s;
+  user-select: none;
+}
+.privacy-toggle:hover { background: var(--surface-hover); transform: translateY(-1.5px); box-shadow: 3.5px 4.5px 0 var(--sticker-shadow); }
+.privacy-toggle:active { transform: translate(2px, 2px); box-shadow: 0 0 0 var(--sticker-shadow); }
+.privacy-toggle:focus-visible { outline: 3px solid var(--accent-deep); outline-offset: 2px; }
+.privacy-toggle svg { flex-shrink: 0; }
+.privacy-toggle.privacy-on { background: var(--accent-soft); }
+
+/* ---------- Reduced motion: instant crossfade ---------- */
+@media (prefers-reduced-motion: reduce) {
+  .amt-real, .amt-mask { transition-duration: 0.01ms !important; }
+  .privacy-toggle { transition-duration: 0.01ms !important; }
+}

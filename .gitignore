@@ -1,0 +1,7 @@
+node_modules/
+dist/
+dev-server.log
+dev.pid
+build.log
+*.local
+.DS_Store
