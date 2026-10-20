@@ -1,17 +1,46 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { motion, useReducedMotion } from 'framer-motion'
+import { motion, useReducedMotion, useScroll, useTransform } from 'framer-motion'
 import { useApp } from '../lib/store'
 import { useCountUp } from '../components/Amount'
 import { formatINR } from '../lib/money'
 import LedgerLogo from '../components/Logo'
-import { ArrowRight, Eye, EyeOff } from '../components/Icons'
+import { ArrowRight, Eye, EyeOff, Shield, Target, Repeat } from '../components/Icons'
 import '../landing.css'
 
 /* Fictional demo numbers — minor units, clearly labelled as demo. */
 const DEMO = { total: 2468000, savings: 1000000, guiltFree: 550000 }
 
-/* ---------- Hero visual: the one flagship card, the masked balance ---------- */
+/* ---------- Chapter reveal variants (in-view, Motion-style) ---------- */
+const chapterIn = {
+  hidden: { opacity: 0, y: 42 },
+  show: (d = 0) => ({
+    opacity: 1,
+    y: 0,
+    transition: { duration: 0.66, delay: d, ease: [0.16, 1, 0.3, 1] as const },
+  }),
+}
+
+function Reveal({ children, delay = 0, className }: { children: React.ReactNode; delay?: number; className?: string }) {
+  const reduced = useReducedMotion()
+  if (reduced) {
+    return <div className={className}>{children}</div>
+  }
+  return (
+    <motion.div
+      className={className}
+      variants={chapterIn}
+      initial="hidden"
+      whileInView="show"
+      viewport={{ once: true, margin: '-80px' }}
+      custom={delay}
+    >
+      {children}
+    </motion.div>
+  )
+}
+
+/* ---------- Hero visual: flagship masked-balance card + chips ---------- */
 
 function PrivacyDemoCard() {
   const [revealed, setRevealed] = useState(false)
@@ -42,31 +71,21 @@ function PrivacyDemoCard() {
 
 function HeroMock() {
   return (
-    <div className="hero-visual" aria-hidden={false}>
+    <div className="hero-visual">
       <PrivacyDemoCard />
       <div className="float-chip chip-a chip-float">
         <span className="chip-tag">Safe today</span>
-        <span className="chip-val">{formatINR(28700, { compact: false }).toString().replace('₹', '₹')}</span>
+        <span className="chip-val">{formatINR(28700)}</span>
       </div>
       <div className="float-chip chip-b chip-float">
-        <span className="chip-tag t-teal">Protected</span>
+        <span className="chip-tag">Protected</span>
         <span className="chip-val">{formatINR(DEMO.savings)}</span>
       </div>
-      <div className="float-chip chip-c chip-float">
-        <span className="chip-tag t-pink">Movie night</span>
+      <div className="float-chip chip-c">
+        <span className="chip-tag">Movie night</span>
         <span className="chip-val">−₹260</span>
       </div>
     </div>
-  )
-}
-
-/* ---------- Section scaffold ---------- */
-
-function Section({ children, className = '', id }: { children: React.ReactNode; className?: string; id?: string }) {
-  return (
-    <section id={id} className={`land-section ${className}`.trim()}>
-      <div className="land-wrap">{children}</div>
-    </section>
   )
 }
 
@@ -81,6 +100,12 @@ export default function Landing() {
   const [eveningChoice, setEveningChoice] = useState<'yes' | 'no'>('no')
   const [navScrolled, setNavScrolled] = useState(false)
   const reduced = useReducedMotion()
+  const heroRef = useRef<HTMLElement | null>(null)
+
+  // Hero visual parallax: the flagship card floats slower than the page.
+  const { scrollYProgress } = useScroll({ target: heroRef, offset: ['start start', 'end start'] })
+  const mockY = useTransform(scrollYProgress, [0, 1], [0, reduced ? 0 : 56])
+  const mockRotate = useTransform(scrollYProgress, [0, 1], [0, reduced ? 0 : -3])
 
   useEffect(() => {
     const onScroll = () => setNavScrolled(window.scrollY > 16)
@@ -104,151 +129,209 @@ export default function Landing() {
         </div>
       </header>
 
-      {/* 1 — Hero: promise, one line, one action, the masked-balance card */}
-      <section className="land-hero" id="top">
+      {/* CHAPTER 1 — Hero: headline, one line, one action, the masked card */}
+      <section className="land-hero" id="top" ref={heroRef}>
         <div className="land-wrap hero-grid">
           <div className="hero-copy">
             <motion.div className="hero-eyebrow" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.45 }}>
-              For students who wonder where it went
+              For students wondering where it went
             </motion.div>
             <h1 className="hero-title" aria-label="Spend without the guilt.">
-              {['Spend', 'without', 'the'].map((w, i) => (
-                <span key={w} className={`hero-title-word rise d${i + 1}`}>{w}</span>
+              {['Spend', 'without', 'the'].map((w) => (
+                <span key={w} className="hero-title-word">{w}</span>
               ))}
-              <span className="hero-title-word hero-guilt-word rise d4" aria-hidden="true">guilt.</span>
+              <span className="hero-title-word hero-guilt-word" aria-hidden="true">guilt.</span>
             </h1>
-            <motion.p className="hero-sub" initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35, duration: 0.55 }}>
+            <motion.p className="hero-sub" initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.32, duration: 0.55 }}>
               Ledger splits every rupee into <strong>protected savings</strong> and{' '}
-              <strong>guilt-free spending</strong> — so you always know what's actually safe to spend,
+              <strong>guilt-free spending</strong> — you always know what's safe to spend,
               and the big total stays private until you choose to look.
             </motion.p>
-            <motion.div className="hero-ctas" initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.48, duration: 0.55 }}>
+            <motion.div className="hero-ctas" initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.46, duration: 0.55 }}>
               <Link to="/app" className="btn btn-lg hero-cta">
                 Enter your financial world <ArrowRight size={18} />
               </Link>
               <a href="#model" className="btn btn-lg ghost-cta">See how it works</a>
             </motion.div>
-            <motion.button className="hero-demo-link" onClick={() => void runDemo()} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.62 }}>
+            <motion.button className="hero-demo-link" onClick={() => void runDemo()} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.6 }}>
               or explore the live demo →
             </motion.button>
           </div>
 
-          <motion.div initial={{ opacity: 0, y: reduced ? 0 : 26 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25, duration: 0.7, ease: [0.16, 1, 0.3, 1] }}>
+          <motion.div style={{ y: mockY, rotate: mockRotate }} initial={{ opacity: 0, scale: 0.94 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.22, duration: 0.7, ease: [0.16, 1, 0.3, 1] }}>
             <HeroMock />
           </motion.div>
         </div>
+        <motion.div
+          className="scroll-cue"
+          animate={reduced ? undefined : { y: [0, 8, 0] }}
+          transition={reduced ? undefined : { repeat: Infinity, duration: 1.8, ease: 'easeInOut' }}
+        >
+          Scroll
+          <span className="cue-line" />
+        </motion.div>
       </section>
 
-      {/* 2 — The money model: one editorial ledger diagram, shown once */}
-      <Section id="model" className="model-band">
-        <div className="sec-head">
-          <span className="sec-kicker">The Ledger model</span>
-          <h2 className="sec-title">Your whole balance, split the moment money arrives.</h2>
-          <p className="sec-sub">Not three confusing apps — one ledger with three lines. This is the entire idea.</p>
-        </div>
-        <div className="model-grid">
-          <div className="rise d1">
-            <div className="model-hero-num">{formatINR(DEMO.total)}</div>
-            <div className="model-hero-label">What you actually have right now — visible here, private in the app.</div>
+      {/* CHAPTER 2 — The model: dark charcoal chapter, ledger diagram */}
+      <section className="lh-chapter model-band" id="model">
+        <div className="land-wrap">
+          <Reveal>
+            <span className="sec-kicker k-pink">The Ledger model</span>
+            <h2 className="sec-title">One balance, three jobs — drawn in the app itself.</h2>
+            <p className="sec-sub">This is the entire idea. No dashboards to decode, nothing to configure first.</p>
+          </Reveal>
+          <div className="model-grid">
+            <Reveal delay={0.08}>
+              <div className="model-hero-num">{formatINR(DEMO.total)}</div>
+              <div className="model-hero-label">What you actually have right now — visible here, private inside the app.</div>
+            </Reveal>
+            <Reveal delay={0.16}>
+              <div className="model-diagram">
+                <div className="model-pot">
+                  <span className="pot-name">Total
+                    <span className="pot-note">The big picture — you decide when to see it</span>
+                  </span>
+                  <span className="pot-amt">{formatINR(DEMO.total)}</span>
+                </div>
+                <div className="model-pot">
+                  <span className="pot-name p-save">Protected
+                    <span className="pot-note">Rent, fees, minimum balance — off limits by default</span>
+                  </span>
+                  <span className="pot-amt">{formatINR(DEMO.savings)}</span>
+                </div>
+                <div className="model-pot">
+                  <span className="pot-name p-spend">Guilt-free
+                    <span className="pot-note">Chai, movies, late-night maggi — yours to spend</span>
+                  </span>
+                  <span className="pot-amt">{formatINR(DEMO.guiltFree)}</span>
+                </div>
+              </div>
+              <p className="model-footnote">Demo numbers. Yours set up in about a minute — pick a protected line, Ledger does the maths.</p>
+            </Reveal>
           </div>
-          <div>
-            <div className="model-diagram rise d2">
-              <div className="model-pot">
-                <span className="pot-name p-total">Total
-                  <span className="pot-note">The big picture — only you decide when to see it</span>
-                </span>
-                <span className="pot-amt main">{formatINR(DEMO.total)}</span>
-              </div>
-              <div className="model-pot">
-                <span className="pot-name p-save">Protected
-                  <span className="pot-note">Rent, fees, minimum balance — off limits by default</span>
-                </span>
-                <span className="pot-amt">{formatINR(DEMO.savings)}</span>
-              </div>
-              <div className="model-pot">
-                <span className="pot-name p-spend">Guilt-free
-                  <span className="pot-note">Safe to spend — chai, movies, late-night maggi</span>
-                </span>
-                <span className="pot-amt">{formatINR(DEMO.guiltFree)}</span>
-              </div>
-            </div>
-            <p className="model-footnote rise d3">Demo numbers. Yours set up in about a minute — pick a protected line, Ledger does the maths.</p>
-          </div>
         </div>
-      </Section>
+      </section>
 
-      {/* 3 — Product story: two real student moments, one interactive */}
-      <Section id="story" className="story-band">
-        <div className="sec-head">
-          <span className="sec-kicker">Ledger in the wild</span>
-          <h2 className="sec-title">Two moments you'll recognise.</h2>
+      {/* CHAPTER 3 — Student moments: pink & teal panels on yellow */}
+      <section className="lh-chapter" id="story">
+        <div className="land-wrap">
+          <Reveal>
+            <span className="sec-kicker">Ledger in the wild</span>
+            <h2 className="sec-title">Two moments you'll recognise.</h2>
+          </Reveal>
+          <div className="story-grid">
+            {/* Movie night: check before you commit */}
+            <Reveal delay={0.05}>
+              <div className="story-card pink">
+                <span className="story-tag">9:41 pm · Friday</span>
+                <div className="sc-row">
+                  <span className="sc-label">Safe to spend tonight</span>
+                  <span className="sc-num">{formatINR(28700)}</span>
+                </div>
+                <div className="sc-swap">
+                  <button className={`sc-choice ${eveningChoice === 'yes' ? 'on' : ''}`} onClick={() => setEveningChoice('yes')} aria-pressed={eveningChoice === 'yes'}>
+                    Movie night
+                  </button>
+                  <button className={`sc-choice ${eveningChoice === 'no' ? 'on' : ''}`} onClick={() => setEveningChoice('no')} aria-pressed={eveningChoice === 'no'}>
+                    Chai with the gang
+                  </button>
+                </div>
+                <p className="sc-cap" key={eveningChoice}>
+                  {eveningChoice === 'yes'
+                    ? <>Movie night takes <em>₹260 of your ₹287</em> — chai tomorrow gets tight. Ledger flags it before you book.</>
+                    : <>Chai keeps <em>₹215 free for the week</em> — movie plans survive till Friday. Say yes to this one.</>}
+                </p>
+                <p className="story-foot">Safe-to-spend is a running number, updated the second you log.</p>
+              </div>
+            </Reveal>
+
+            {/* Laptop goal */}
+            <Reveal delay={0.14}>
+              <div className="story-card teal">
+                <span className="story-tag">Goal · first laptop</span>
+                <div className="sc-row">
+                  <span className="sc-label">Saved so far</span>
+                  <span className="sc-num">{formatINR(840000)} <span className="sc-of">/ {formatINR(2500000)}</span></span>
+                </div>
+                <div className="sc-bar" aria-hidden="true">
+                  <motion.span
+                    className="sc-bar-fill"
+                    initial={{ width: reduced ? '34%' : 0 }}
+                    whileInView={{ width: '34%' }}
+                    viewport={{ once: true }}
+                    transition={{ duration: reduced ? 0 : 1.1, ease: [0.16, 1, 0.3, 1] }}
+                  />
+                </div>
+                <p className="sc-cap">
+                  ~<em>₹350 a week</em> moved from guilt-free money. Two trips skipped; the laptop fund noticed every time.
+                </p>
+                <p className="story-foot">Goals are fed from spending money — never from your protected line.</p>
+              </div>
+            </Reveal>
+          </div>
         </div>
-        <div className="story-grid">
-          {/* Night plan: check safe-to-spend before saying yes */}
-          <div className="story-card rise">
-            <span className="story-tag">9:41 pm · before you say yes</span>
-            <div className="sc-row">
-              <span className="sc-label">Safe to spend tonight</span>
-              <span className="sc-num">{formatINR(28700)}</span>
+      </section>
+
+      {/* CHAPTER 4 — App glimpse: real phone frame + feature list */}
+      <section className="lh-chapter app-glimpse" id="app">
+        <div className="land-wrap glimpse-grid">
+          <Reveal>
+            <div className="g-feature">
+              <div className="g-item">
+                <span className="g-icon pink-ic"><Shield size={22} /></span>
+                <div>
+                  <h3>Private by default</h3>
+                  <p>The total balance is the one number that stays masked — with one click to show it.</p>
+                </div>
+              </div>
+              <div className="g-item">
+                <span className="g-icon teal-ic"><Target size={22} /></span>
+                <div>
+                  <h3>Budgets that breathe</h3>
+                  <p>See what each category has left this month, as soon as you log it.</p>
+                </div>
+              </div>
+              <div className="g-item">
+                <span className="g-icon"><Repeat size={22} /></span>
+                <div>
+                  <h3>Recurring, remembered</h3>
+                  <p>Rent, wifi, subscriptions — logged on schedule, flagged before they bite.</p>
+                </div>
+              </div>
             </div>
-            <div className="sc-bar" aria-hidden>
-              <span className="sc-bar-fill" style={{ width: eveningChoice === 'yes' ? '38%' : '62%' }} />
+          </Reveal>
+          <Reveal delay={0.12}>
+            <div className="mock-phone" role="img" aria-label="Preview of the Ledger dashboard">
+              <div className="mock-balance-label">Total balance (demo)</div>
+              <div className="mock-balance">₹••••••</div>
+              <div className="mock-row"><span>Mess fees</span><span className="mock-amt neg">−₹2,400</span></div>
+              <div className="mock-row"><span>Chai run <span className="mock-tag">Food</span></span><span className="mock-amt neg">−₹60</span></div>
+              <div className="mock-row"><span>Scholarship credit</span><span className="mock-amt pos">+₹8,000</span></div>
+              <div className="mock-safe">Safe to spend today · ₹287</div>
+              <div className="demo-shield">Only the big total is masked — everything else stays readable.</div>
             </div>
-            <div className="sc-swap">
-              <button className={`sc-choice ${eveningChoice === 'yes' ? 'on' : ''}`} onClick={() => setEveningChoice('yes')} aria-pressed={eveningChoice === 'yes'}>
-                Movie night
+          </Reveal>
+        </div>
+      </section>
+
+      {/* CHAPTER 5 — closing CTA on pink */}
+      <section className="cta-band">
+        <div className="land-wrap">
+          <Reveal>
+            <span className="sec-kicker">Start today</span>
+            <h2 className="sec-title">Know what you can actually spend.</h2>
+            <p className="cta-sub">Free for students. Set up in under a minute — no card, no fuss.</p>
+            <div className="hero-ctas">
+              <Link to="/app" className="btn btn-lg hero-cta">
+                Enter your financial world <ArrowRight size={18} />
+              </Link>
+              <button type="button" className="btn btn-lg ghost-cta" onClick={() => void runDemo()}>
+                Try the demo
               </button>
-              <button className={`sc-choice ${eveningChoice === 'no' ? 'on' : ''}`} onClick={() => setEveningChoice('no')} aria-pressed={eveningChoice === 'no'}>
-                Chai with the gang
-              </button>
             </div>
-            <p className="sc-cap" key={eveningChoice}>
-              {eveningChoice === 'yes'
-                ? <>Movie night spends <em>₹260 of your ₹287</em> — chai tomorrow gets tight. Ledger flags it before you book.</>
-                : <>Chai keeps <em>₹215 free for the week</em> — movie plans survive till Friday. Say yes to this one.</>}
-            </p>
-            <p className="story-foot">Safe-to-spend is a running number, not a guess.</p>
-          </div>
-
-          {/* Laptop goal: guilt-free money quietly building a dream */}
-          <div className="story-card teal rise d1">
-            <span className="story-tag">Goal · first laptop</span>
-            <div className="sc-row">
-              <span className="sc-label">Saved so far</span>
-              <span className="sc-num">{formatINR(840000)} <span className="sc-of">/ {formatINR(2500000)}</span></span>
-            </div>
-            <div className="sc-bar" aria-hidden>
-              <motion.span
-                className="sc-bar-fill mint"
-                initial={{ width: 0 }}
-                whileInView={{ width: '34%' }}
-                viewport={{ once: true }}
-                transition={{ duration: reduced ? 0 : 1, ease: [0.16, 1, 0.3, 1] }}
-              />
-            </div>
-            <p className="sc-cap">
-              ~<em>₹350 a week</em> siphoned from guilt-free money. You skipped two trips; the laptop fund noticed every time.
-            </p>
-            <p className="story-foot">Goals are fed by spending money — not by touching your protected line.</p>
-          </div>
+          </Reveal>
         </div>
-      </Section>
-
-      {/* 4 — Closing CTA */}
-      <Section className="cta-band">
-        <div className="rise">
-          <h2 className="sec-title">Know what you can actually spend.</h2>
-          <p className="cta-sub">Free for students. Set up in under a minute — no card, no fuss.</p>
-          <div className="hero-ctas">
-            <Link to="/app" className="btn btn-lg hero-cta">
-              Enter your financial world <ArrowRight size={18} />
-            </Link>
-            <button type="button" className="btn btn-lg ghost-cta" onClick={() => void runDemo()}>
-              Try the demo
-            </button>
-          </div>
-        </div>
-      </Section>
+      </section>
 
       <footer className="land-footer">
         <div className="land-wrap land-footer-inner">

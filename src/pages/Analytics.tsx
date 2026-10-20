@@ -19,6 +19,9 @@ export default function Analytics() {
 
   const months = MONTHS_FOR[range]
   const series = useMemo(() => monthlySeries(txns, months), [txns, months])
+  // The savings trend is always a *monthly* line: with 7D/30D only one
+  // bucket exists, which renders as a lone dot — extend to 3 months minimum.
+  const savingsSeries = useMemo(() => monthlySeries(txns, Math.max(months, 3)), [txns, months])
   const days = range === '7D' ? 7 : range === '30D' ? 30 : 0
   const dailyBars = useMemo(() => {
     if (!days) return []
@@ -95,7 +98,7 @@ export default function Analytics() {
 
       {/* Savings trend */}
       <ChartCard title="Monthly savings" sub="Income minus expenses, per month" wide>
-        <LineChart points={series.map((p) => ({ label: p.label, value: p.net }))} />
+        <LineChart points={savingsSeries.map((p) => ({ label: p.label, value: p.net }))} />
       </ChartCard>
 
       {txns.length === 0 && (
