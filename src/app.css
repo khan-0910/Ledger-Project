@@ -1957,3 +1957,97 @@
 .shell-settings .danger-card .btn-ghost,
 .shell-settings .danger-card .btn-soft { color: #4d2a06; }
 .shell-settings .danger-card .btn-danger { background: #d3423f; color: #fff; }
+
+
+/* ============================================================
+   POLISH PASS 1 — the five calm-upgrades (visual critique 2025-10)
+   1. Canvas bloom: strong colour behind the hero strip, family
+      colour (very low saturation) for the body so panels read as
+      paper. Applies to all 7 shells.
+   2. Type scale separation: giant greeting, caps micro-labels,
+      body stays regular weight (no more bold-on-bold).
+   3. Tabular figures on every amount; tightened big-number
+      tracking (display-num already covers it).
+   4. Calm hover: border-ink + faint tint instead of heavy lift;
+      heavy lift stays reserved for .fab / .demo-card / primary CTA.
+   5. One radius + padding family for .card (12/16/22 & 16/24).
+   Scoped so the homepage (.landing) is untouched.
+   ============================================================ */
+
+/* ---- 1 · Canvas bloom: most shells already tint their --pg value.
+   Refine: body below the hero drifts toward the low-sat family
+   colour, giving the top strip the "loudest" moment. ---------- */
+.shell-dash {
+  background:
+    linear-gradient(180deg, var(--pg) 0%, var(--pg) 240px, color-mix(in srgb, var(--pg) 62%, #fdf4f6) 420px, color-mix(in srgb, var(--pg) 30%, #fdf4f6) 100%);
+}
+.shell-txns {
+  background:
+    linear-gradient(180deg, var(--pg) 0%, var(--pg) 240px, color-mix(in srgb, var(--pg) 55%, #fef6ec) 420px, color-mix(in srgb, var(--pg) 32%, #fef6ec) 100%);
+}
+.shell-budgets {
+  background:
+    linear-gradient(180deg, var(--pg) 0%, var(--pg) 240px, color-mix(in srgb, var(--pg) 55%, #fdf8ee) 420px, color-mix(in srgb, var(--pg) 32%, #fdf8ee) 100%);
+}
+.shell-goals {
+  background:
+    linear-gradient(180deg, var(--pg) 0%, var(--pg) 240px, color-mix(in srgb, var(--pg) 55%, #f2faf5) 420px, color-mix(in srgb, var(--pg) 32%, #f2faf5) 100%);
+}
+.shell-analytics {
+  background:
+    linear-gradient(180deg, var(--pg) 0%, var(--pg) 240px, color-mix(in srgb, var(--pg) 55%, #f4f8fd) 420px, color-mix(in srgb, var(--pg) 32%, #f4f8fd) 100%);
+}
+.shell-recurring {
+  background:
+    linear-gradient(180deg, var(--pg) 0%, var(--pg) 240px, color-mix(in srgb, var(--pg) 60%, #f0f7fd) 420px, color-mix(in srgb, var(--pg) 32%, #f0f7fd) 100%);
+}
+.shell-settings {
+  background:
+    linear-gradient(180deg, var(--pg) 0%, var(--pg) 240px, color-mix(in srgb, var(--pg) 55%, #fdfaf2) 420px, color-mix(in srgb, var(--pg) 32%, #fdfaf2) 100%);
+}
+
+/* ---- 2 · Type scale: page greeting larger, section labels caps,
+   body calm ------------------------------------------------- */
+.page-title { font-size: clamp(30px, 3.6vw, 40px); font-weight: 800; }
+.sec-title, .card-title { font-weight: 750; letter-spacing: -0.01em; }
+.page-head .page-sub { text-transform: none; font-weight: 500; }
+.eyebrow { text-transform: uppercase; letter-spacing: 0.09em; font-weight: 800; font-size: 12px; }
+/* body text stops shouting: bold reserved for labels/figures */
+.page p:not(.eyebrow):not(.card-title) { font-weight: 480; }
+
+/* ---- 3 · Money typeset: all amounts use lining tabular figures */
+.amt, .amt-real, .amt-dots, .hero-num, .alloc-val, .gf-num, .gf-stat,
+.bt-num, .bc-amt, .gc-val, .stat-num, .sts-num, .txn-amt, .detail-amt,
+.num, .percent, .set-num, .rec-amt, .budget-total-num, .insight-amt,
+.mock-amt, .txn-group-sum, .pot-amt, .sc-num, .chip-val, .demo-amount {
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: "tnum" 1, "lnum" 1;
+}
+/* THE flagship figure only: tighten tracking — the rest stay normal */
+.shell-dash .hero-num, .landing .model-hero-num, .landing .demo-amount {
+  letter-spacing: -0.035em;
+}
+
+/* ---- 4 · Calm hover: cards stop flying; border-ink + faint tint */
+.card:hover {
+  transform: none;
+  box-shadow: var(--sticker-shadow-card);
+}
+.card:hover {
+  box-shadow: var(--sticker-shadow-card), 0 0 0 1.5px color-mix(in srgb, var(--pg-ink, var(--sticker-border)) 55%, transparent),
+              inset 0 0 0 100px color-mix(in srgb, var(--pg-ink, var(--sticker-border)) 3%, transparent);
+}
+/* keep the expressive life where it belongs */
+.fab:hover, .demo-reveal:hover, .btn-primary:hover, .bnav-add:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--sticker-shadow-lift);
+}
+.txn-row:hover { background: color-mix(in srgb, var(--pg-ink, var(--sticker-border)) 6%, transparent); }
+
+/* ---- 5 · One radius/padding family (sm 12 / md 16 / lg 22) ---- */
+.card, .stat-card, .set-card, .goal-card, .budget-card, .insight-card,
+.alloc-card, .gf-card, .sts-card, .demo-card {
+  border-radius: var(--radius-lg); /* 22px — one calm family */
+}
+.cat-parent .cat, .input, .select { border-radius: var(--radius-md); }  /* 16px */
+.chip, .sc-tag, .demo-badge { border-radius: 999px; }
