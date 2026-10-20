@@ -66,6 +66,21 @@
 }
 .land-nav .btn-primary:hover { background: var(--lh-charcoal-panel); transform: none; box-shadow: none; }
 .land-nav.scrolled { box-shadow: 0 2px 0 var(--lh-line); }
+/* Dark-banner mode: when the header crosses the charcoal model band it
+   flips to an ink surface with cream text — including its buttons and
+   borders. The tiny transition avoids flicker while crossing boundaries. */
+.land-nav.dark-nav {
+  background: var(--lh-charcoal-panel);
+  border-bottom-color: rgba(255, 250, 240, 0.18);
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.35);
+  transition: background-color 0.25s ease, border-color 0.25s ease;
+}
+.land-nav.dark-nav .logo-word { color: var(--lh-canvas); }
+.land-nav.dark-nav .btn-ghost { color: var(--lh-canvas); border-color: rgba(255, 250, 240, 0.55); }
+.land-nav.dark-nav .btn-ghost:hover { background: rgba(255, 250, 240, 0.08); border-color: var(--lh-canvas); }
+.land-nav.dark-nav .btn-primary { background: var(--lh-canvas); color: var(--lh-ink); border-color: var(--lh-canvas); }
+.land-nav.dark-nav .btn-primary:hover { background: #ffe361; }
+.land-nav:not(.dark-nav) { transition: background-color 0.25s ease, border-color 0.25s ease; }
 .land-wrap { max-width: 1160px; margin: 0 auto; padding: 0 clamp(20px, 5vw, 52px); width: 100%; }
 
 /* ---------- Section scaffolding ---------- */
@@ -276,6 +291,168 @@
 .model-band { background: var(--lh-charcoal-panel); color: #fff; }
 .model-band .sec-title { color: #fff; }
 .model-band .sec-sub { color: rgba(255, 250, 240, 0.75); }
+
+/* ============================================================
+   MONEY STORY (model chapter): pinned scroll-linked scene
+   Dragged by the page scrollbar via useScroll + useTransform.
+   No wheel hijack: only CSS sticky pins it.
+   ============================================================ */
+.ms-scene { display: block; padding: 0; }
+.ms-scene .land-wrap { max-width: 1160px; margin: 0 auto; padding: 0 clamp(20px, 5vw, 52px); width: 100%; }
+
+/* The tall scroll runway: ~4 viewport heights of story scroll. */
+.ms-scene:not(.ms-scene--static) { height: 380vh; }
+
+/* Sticky visual canvas that stays put while the runway scrolls. */
+.ms-sticky {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+}
+
+.ms-grid {
+  display: grid;
+  grid-template-columns: minmax(280px, 0.92fr) 1.08fr;
+  gap: clamp(30px, 5vw, 76px);
+  align-items: center;
+}
+
+/* Caption stack: 4 lines crossfading per beat (scroll-linked opacity). */
+.ms-captions { position: relative; min-height: 230px; margin-top: 10px; }
+.ms-caption {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 10px;
+}
+.ms-step {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(255, 250, 240, 0.6);
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+.ms-step::before { content: ''; width: 26px; height: 3px; border-radius: 3px; background: var(--lh-pink); }
+.ms-cap-label {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: clamp(30px, 4vw, 52px);
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  color: #fff;
+  margin: 0;
+}
+.ms-cap-text { font-size: clamp(15px, 1.6vw, 17.5px); line-height: 1.6; color: rgba(255, 250, 240, 0.78); max-width: 34em; margin: 0; }
+
+/* Progress dots: scale/opacity tick per beat, also scroll-linked. */
+.ms-dots { display: flex; gap: 9px; margin-top: 22px; }
+.ms-dot {
+  width: 9px; height: 9px; border-radius: 50%;
+  background: rgba(255, 250, 240, 0.32);
+  transform-origin: center;
+}
+.ms-dot-0 { background: rgba(255, 250, 240, 0.9); }
+.ms-dot-1 { background: #7fd4df; }
+.ms-dot-2 { background: #ff9dbb; }
+.ms-dot-3 { background: #ffd93d; }
+
+/* The stage visual: cream card on charcoal, morphing per beat. */
+.ms-stage {
+  background: var(--lh-card);
+  border: 2.5px solid #1d1a16;
+  border-radius: 22px;
+  padding: clamp(22px, 3vw, 34px);
+  box-shadow: 12px 14px 0 rgba(0, 0, 0, 0.35);
+  color: var(--lh-ink);
+  max-width: 520px;
+  justify-self: end;
+  width: 100%;
+}
+.ms-stage-top { display: flex; align-items: center; gap: 10px; min-height: 28px; flex-wrap: wrap; }
+.ms-stage-label {
+  font-size: 11px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase;
+  color: var(--lh-ink-soft);
+  margin-right: auto;
+}
+.ms-stage-pill {
+  font-size: 11px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase;
+  padding: 5px 12px; border-radius: 999px;
+  background: var(--lh-canvas); color: var(--lh-ink);
+}
+.ms-stage-pill.ms-pill-teal { background: var(--lh-teal); color: #fff; }
+.ms-stage-pill.ms-pill-pink { background: var(--lh-pink); color: #fff; }
+.ms-stage-pill.ms-pill-ink { background: var(--lh-ink); color: var(--lh-canvas); }
+.ms-stage-number {
+  font-size: clamp(42px, 5vw, 60px);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  margin-top: 14px;
+  color: var(--lh-ink);
+  min-height: 1.1em;
+}
+
+/* Split bar: protected + guilt-free segments, scroll-linked widths. */
+.ms-bar {
+  display: flex;
+  gap: 4px;
+  height: 22px;
+  margin-top: 16px;
+  border: 2px solid #1d1a16;
+  border-radius: 999px;
+  padding: 3px;
+  background: #f6eede; /* rests-of-total sub-segment tone */
+}
+.ms-bar-seg { height: 100%; border-radius: 999px; }
+.ms-bar-protected { background: var(--lh-teal); }
+.ms-bar-guilt { background: var(--lh-pink); }
+.ms-legend { display: flex; gap: 16px; margin-top: 12px; flex-wrap: wrap; }
+.ms-leg { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 800; color: var(--lh-ink-soft); }
+.ms-leg i { width: 11px; height: 11px; border-radius: 3px; display: inline-block; border: 1.5px solid rgba(29, 26, 22, 0.4); }
+.ms-leg-teal i { background: var(--lh-teal); }
+.ms-leg-pink i { background: var(--lh-pink); }
+.ms-leg-rest i { background: #f6eede; }
+
+.ms-stage-foot { margin-top: 18px; font-size: 12.5px; color: var(--lh-ink-soft); }
+
+/* Static fallback (reduced-motion / narrow screens): plain cards, no pinning. */
+.ms-static { display: flex; flex-direction: column; gap: 16px; margin-top: 26px; }
+.ms-static-card {
+  background: rgba(255, 250, 240, 0.96);
+  border: 2px solid rgba(29, 26, 22, 0.75);
+  border-radius: 16px;
+  padding: 18px 22px;
+  color: var(--lh-ink);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.ms-static-card .ms-cap-label { font-size: clamp(21px, 3vw, 26px); color: var(--lh-ink); }
+.ms-static-card .ms-cap-text { color: var(--lh-ink-soft); }
+.ms-static-card .ms-step { color: var(--lh-pink-deep); }
+.ms-static-bar, .ms-static .ms-bar {
+  display: flex; gap: 4px; height: 22px; margin-top: 10px;
+  border: 2px solid #1d1a16; border-radius: 999px; padding: 3px; background: #f6eede;
+}
+.ms-static .ms-stage-pill { margin-right: 6px; }
+
+/* On narrow screens the pinned scene uses the same static layout as
+   reduced-motion: plain stacked cards. The static variant already handles that.
+   Reveal gating for reduced motion is handled in the component already. */
+@media (max-width: 920px) {
+  .ms-scene:not(.ms-scene--static) { height: auto; }
+  .ms-sticky { position: static; height: auto; padding-block: 56px; }
+  .ms-grid { grid-template-columns: 1fr; }
+  .ms-stage { justify-self: stretch; max-width: none; }
+}
 .model-grid {
   display: grid;
   grid-template-columns: minmax(260px, 0.95fr) 1.05fr;

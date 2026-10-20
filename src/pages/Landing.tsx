@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { motion, useReducedMotion, useScroll, useTransform } from 'framer-motion'
+import { motion, useReducedMotion, useScroll, useTransform, type MotionValue } from 'framer-motion'
 import { useApp } from '../lib/store'
 import { useCountUp } from '../components/Amount'
 import { formatINR } from '../lib/money'
@@ -9,9 +9,14 @@ import { ArrowRight, Eye, EyeOff, Shield, Target, Repeat } from '../components/I
 import '../landing.css'
 
 /* Fictional demo numbers — minor units, clearly labelled as demo. */
-const DEMO = { total: 2468000, savings: 1000000, guiltFree: 550000 }
+const DEMO = {
+  total: 24680_00,
+  savings: 10000_00,
+  guiltFree: 5500_00,
+  safe: 287_00,
+}
 
-/* ---------- Chapter reveal variants (in-view, Motion-style) ---------- */
+/* ---------- Chapter reveal variants (in-view, secondary to scroll-linked) ---------- */
 const chapterIn = {
   hidden: { opacity: 0, y: 42 },
   show: (d = 0) => ({
@@ -32,7 +37,7 @@ function Reveal({ children, delay = 0, className }: { children: React.ReactNode;
       variants={chapterIn}
       initial="hidden"
       whileInView="show"
-      viewport={{ once: true, margin: '-80px' }}
+      viewport={{ once: true, amount: 0.25 }}
       custom={delay}
     >
       {children}
@@ -75,7 +80,7 @@ function HeroMock() {
       <PrivacyDemoCard />
       <div className="float-chip chip-a chip-float">
         <span className="chip-tag">Safe today</span>
-        <span className="chip-val">{formatINR(28700)}</span>
+        <span className="chip-val">{formatINR(DEMO.safe)}</span>
       </div>
       <div className="float-chip chip-b chip-float">
         <span className="chip-tag">Protected</span>
@@ -89,6 +94,223 @@ function HeroMock() {
   )
 }
 
+/* ============================================================
+   MONEY STORY — a pinned, scroll-linked chapter.
+   One stage visual (the balance card + its split bar) is driven
+   directly by scroll position through useScroll + useTransform:
+   the headline counts up through the four beats (total →
+   protected → guilt-free → safe today) and the split bar draws,
+   all reversible with the scrollbar.
+   ============================================================ */
+
+type Beat = { step: string; label: string; text: string }
+
+const STORY_BEATS: Beat[] = [
+  {
+    step: '01',
+    label: 'Total balance',
+    text: 'Everything in the account is one number — ₹24,680 all in. Here it counts up with your scroll.',
+  },
+  {
+    step: '02',
+    label: 'Protected first',
+    text: '₹10,000 is locked away before anything else — rent, fees, the minimum balance. Off limits by default.',
+  },
+  {
+    step: '03',
+    label: 'Guilt-free',
+    text: '₹5,500 is yours to actually enjoy — chai, movies, late-night maggi. Spend it without running the maths.',
+  },
+  {
+    step: '04',
+    label: 'Safe today',
+    text: 'After today\u2019s plans, ₹287 is the number you actually look at before you say yes.',
+  },
+]
+
+/* Windows are fractions of the chapter's scroll progress (0..1). */
+const beatWindow = (i: number): [number, number, number, number] => [
+  i * 0.25 - 0.06,
+  i * 0.25 + 0.02,
+  i * 0.25 + 0.22,
+  i * 0.25 + 0.28,
+]
+
+/** One crossfading caption line — fully scroll-linked opacity. */
+function StoryCaption({ progress, index, beat }: { progress: MotionValue<number>; index: number; beat: Beat }) {
+  const [a, b, c, d] = beatWindow(index)
+  const opacity = useTransform(
+    progress,
+    [a, b, c, d],
+    index === 0 ? [1, 1, 1, 0] : index === STORY_BEATS.length - 1 ? [0, 1, 1, 1] : [0, 1, 1, 0],
+  )
+  const y = useTransform(progress, [a, b], index === 0 ? [0, 0] : [26, 0])
+  return (
+    <motion.div className="ms-caption" style={{ opacity, y }}>
+      <span className="ms-step">{beat.step}</span>
+      <h3 className="ms-cap-label">{beat.label}</h3>
+      <p className="ms-cap-text">{beat.text}</p>
+    </motion.div>
+  )
+}
+
+function StoryDot({ progress, index }: { progress: MotionValue<number>; index: number }) {
+  const [a, b, c, d] = beatWindow(index)
+  const scale = useTransform(progress, [a, b, c, d], index === 0 ? [1.3, 1.3, 1.3, 1] : [0.7, 1.3, 1.3, 0.7])
+  const opacity = useTransform(progress, [a, b, c, d], index === 0 ? [1, 1, 1, 0.35] : [0.35, 1, 1, 0.35])
+  return (
+    <motion.span
+      className={`ms-dot ms-dot-${index}`}
+      style={{ scale, opacity }}
+      aria-hidden="true"
+    />
+  )
+}
+
+/** The stage visual: balance number + labels + split bar, all scroll-linked. */
+function StoryStage({ progress, reduced }: { progress: MotionValue<number>; reduced: boolean }) {
+  /* The headline number morphs continuously through the four beats. */
+  const headlineRaw = useTransform(
+    progress,
+    [0, 0.18, 0.3, 0.48, 0.56, 0.68, 0.86, 1],
+    reduced
+      ? new Array(8).fill(DEMO.safe)
+      : [0, DEMO.total, DEMO.total, DEMO.savings, DEMO.savings, DEMO.guiltFree, DEMO.safe, DEMO.safe],
+  )
+  const headline = useTransform(headlineRaw, (v) => formatINR(Math.round(v)))
+
+  /* The split bar: protected grows, then guilt-free, then guilt-free
+     drains to today's sliver as the story lands on safe-to-spend. */
+  const protectedWidth = useTransform(progress, [0, 0.26, 0.44, 1], ['0%', '0%', '41%', '41%'])
+  const guiltWidth = useTransform(progress, [0, 0.5, 0.62, 0.8, 0.92, 1], ['0%', '0%', '22%', '22%', '1%', '1%'])
+
+  /* Small label pill under the number crossfades per beat. */
+  const pillOpacity = STORY_BEATS.map((_, i) => {
+    const [a, b, c, d] = beatWindow(i)
+    return useTransform(progress, [a, b, c, d], i === 0 ? [1, 1, 1, 0] : i === STORY_BEATS.length - 1 ? [0, 1, 1, 1] : [0, 1, 1, 0])
+  })
+
+  return (
+    <div className="ms-stage" aria-label="Ledger money model, advancing as you scroll">
+      <div className="ms-stage-top">
+        <span className="ms-stage-label">Ledger · demo</span>
+        <motion.span className="ms-stage-pill" style={{ opacity: pillOpacity[0] }}>
+          Total balance
+        </motion.span>
+        <motion.span className="ms-stage-pill ms-pill-teal" style={{ opacity: pillOpacity[1] }}>
+          Protected
+        </motion.span>
+        <motion.span className="ms-stage-pill ms-pill-pink" style={{ opacity: pillOpacity[2] }}>
+          Guilt-free
+        </motion.span>
+        <motion.span className="ms-stage-pill ms-pill-ink" style={{ opacity: pillOpacity[3] }}>
+          Safe today
+        </motion.span>
+      </div>
+      <motion.div className="ms-stage-number">{headline}</motion.div>
+      <div className="ms-bar" role="img" aria-label="Split of the balance into protected and guilt-free money">
+        <motion.span className="ms-bar-seg ms-bar-protected" style={{ width: protectedWidth }} />
+        <motion.span className="ms-bar-seg ms-bar-guilt" style={{ width: guiltWidth }} />
+      </div>
+      <div className="ms-legend">
+        <span className="ms-leg ms-leg-teal"><i />Protected</span>
+        <span className="ms-leg ms-leg-pink"><i />Guilt-free</span>
+        <span className="ms-leg ms-leg-rest"><i />Everything else</span>
+      </div>
+      <p className="ms-stage-foot">Every rupee of the total lands in one of these buckets.</p>
+    </div>
+  )
+}
+
+/** Static fallback: no pinning, no scroll-linked motion (reduced motion / mobile). */
+function StaticMoneyStory() {
+  return (
+    <div className="ms-static">
+      {STORY_BEATS.map((beat) => (
+        <div className="ms-static-card" key={beat.step}>
+          <span className="ms-step">{beat.step}</span>
+          <h3 className="ms-cap-label">{beat.label}</h3>
+          <p className="ms-cap-text">{beat.text}</p>
+        </div>
+      ))}
+      <div className="ms-static-bar" role="img" aria-label="Final split of the balance into protected and guilt-free money">
+        <span className="ms-bar-seg ms-bar-protected" style={{ width: '41%' }} />
+        <span className="ms-bar-seg ms-bar-guilt" style={{ width: '22%' }} />
+      </div>
+      <div className="ms-legend">
+        <span className="ms-leg ms-leg-teal"><i />Protected</span>
+        <span className="ms-leg ms-leg-pink"><i />Guilt-free</span>
+        <span className="ms-leg ms-leg-rest"><i />Everything else</span>
+      </div>
+    </div>
+  )
+}
+
+function MoneyStory() {
+  const reduced = useReducedMotion()
+  const narrow = useIsNarrow()
+  const staticMode = Boolean(reduced) || narrow
+  const sceneRef = useRef<HTMLElement | null>(null)
+
+  const { scrollYProgress } = useScroll({ target: sceneRef, offset: ['start start', 'end end'] })
+  const visualProgress = useTransform(scrollYProgress, [0, 1], [0, 1])
+
+  if (staticMode) {
+    return (
+      <section className="lh-chapter model-band ms-scene ms-scene--static" id="model" data-navband="dark">
+        <div className="land-wrap">
+          <span className="sec-kicker k-pink">How the money works</span>
+          <h2 className="sec-title">One balance, four beats.</h2>
+          <p className="sec-sub">Total → protected → guilt-free → safe today. Scroll is not animating this version; every beat is laid out plainly.</p>
+          <StaticMoneyStory />
+        </div>
+      </section>
+    )
+  }
+
+  return (
+    <section className="lh-chapter model-band ms-scene" id="model" ref={sceneRef} data-navband="dark">
+      <div className="ms-sticky">
+        <div className="land-wrap ms-grid">
+          <div className="ms-copy">
+            <span className="sec-kicker k-pink">How the money works</span>
+            <div className="ms-captions">
+              {STORY_BEATS.map((beat, i) => (
+                <StoryCaption key={beat.step} progress={visualProgress} index={i} beat={beat} />
+              ))}
+            </div>
+            <div className="ms-dots" aria-hidden="true">
+              {STORY_BEATS.map((_, i) => (
+                <StoryDot key={i} progress={visualProgress} index={i} />
+              ))}
+            </div>
+          </div>
+          <StoryStage progress={visualProgress} reduced={Boolean(reduced)} />
+        </div>
+      </div>
+    </section>
+  )
+}
+
+/* ============================================================
+   Hero / chapter scaffolding for the rest of the page
+   ============================================================ */
+
+/** Match-breakpoint hook: below this width the pinned scene becomes a plain list. */
+function useIsNarrow(): boolean {
+  const [narrow, setNarrow] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia('(max-width: 920px)').matches,
+  )
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 920px)')
+    const onChange = () => setNarrow(mq.matches)
+    onChange()
+    mq.addEventListener('change', onChange)
+    return () => mq.removeEventListener('change', onChange)
+  }, [])
+  return narrow
+}
+
 export default function Landing() {
   const { demoSignIn } = useApp()
   const navigate = useNavigate()
@@ -98,25 +320,41 @@ export default function Landing() {
     if (!err) navigate('/app')
   }
   const [eveningChoice, setEveningChoice] = useState<'yes' | 'no'>('no')
-  const [navScrolled, setNavScrolled] = useState(false)
   const reduced = useReducedMotion()
   const heroRef = useRef<HTMLElement | null>(null)
+
+  /* Header theme: dark surface when it crosses the charcoal model band. */
+  const navRef = useRef<HTMLElement | null>(null)
+  const [darkNav, setDarkNav] = useState(false)
+  useEffect(() => {
+    const update = () => {
+      const nav = navRef.current
+      if (!nav) return
+      const probeY = nav.getBoundingClientRect().bottom + 1
+      let over = false
+      document.querySelectorAll('[data-navband="dark"]').forEach((sec) => {
+        const r = (sec as HTMLElement).getBoundingClientRect()
+        if (r.top <= probeY && r.bottom >= probeY) over = true
+      })
+      setDarkNav(over)
+    }
+    update()
+    window.addEventListener('scroll', update, { passive: true })
+    window.addEventListener('resize', update)
+    return () => {
+      window.removeEventListener('scroll', update)
+      window.removeEventListener('resize', update)
+    }
+  }, [])
 
   // Hero visual parallax: the flagship card floats slower than the page.
   const { scrollYProgress } = useScroll({ target: heroRef, offset: ['start start', 'end start'] })
   const mockY = useTransform(scrollYProgress, [0, 1], [0, reduced ? 0 : 56])
   const mockRotate = useTransform(scrollYProgress, [0, 1], [0, reduced ? 0 : -3])
 
-  useEffect(() => {
-    const onScroll = () => setNavScrolled(window.scrollY > 16)
-    onScroll()
-    window.addEventListener('scroll', onScroll, { passive: true })
-    return () => window.removeEventListener('scroll', onScroll)
-  }, [])
-
   return (
     <div className="landing">
-      <header className={`land-nav ${navScrolled ? 'scrolled' : ''}`}>
+      <header className={`land-nav ${darkNav ? 'dark-nav' : ''}`} ref={navRef}>
         <div className="land-wrap land-nav-inner">
           <Link to="/" className="logo-link" aria-label="Ledger home">
             <LedgerLogo size={30} />
@@ -172,45 +410,8 @@ export default function Landing() {
         </motion.div>
       </section>
 
-      {/* CHAPTER 2 — The model: dark charcoal chapter, ledger diagram */}
-      <section className="lh-chapter model-band" id="model">
-        <div className="land-wrap">
-          <Reveal>
-            <span className="sec-kicker k-pink">The Ledger model</span>
-            <h2 className="sec-title">One balance, three jobs — drawn in the app itself.</h2>
-            <p className="sec-sub">This is the entire idea. No dashboards to decode, nothing to configure first.</p>
-          </Reveal>
-          <div className="model-grid">
-            <Reveal delay={0.08}>
-              <div className="model-hero-num">{formatINR(DEMO.total)}</div>
-              <div className="model-hero-label">What you actually have right now — visible here, private inside the app.</div>
-            </Reveal>
-            <Reveal delay={0.16}>
-              <div className="model-diagram">
-                <div className="model-pot">
-                  <span className="pot-name">Total
-                    <span className="pot-note">The big picture — you decide when to see it</span>
-                  </span>
-                  <span className="pot-amt">{formatINR(DEMO.total)}</span>
-                </div>
-                <div className="model-pot">
-                  <span className="pot-name p-save">Protected
-                    <span className="pot-note">Rent, fees, minimum balance — off limits by default</span>
-                  </span>
-                  <span className="pot-amt">{formatINR(DEMO.savings)}</span>
-                </div>
-                <div className="model-pot">
-                  <span className="pot-name p-spend">Guilt-free
-                    <span className="pot-note">Chai, movies, late-night maggi — yours to spend</span>
-                  </span>
-                  <span className="pot-amt">{formatINR(DEMO.guiltFree)}</span>
-                </div>
-              </div>
-              <p className="model-footnote">Demo numbers. Yours set up in about a minute — pick a protected line, Ledger does the maths.</p>
-            </Reveal>
-          </div>
-        </div>
-      </section>
+      {/* CHAPTER 2 — the pinned, scroll-linked money story */}
+      <MoneyStory />
 
       {/* CHAPTER 3 — Student moments: pink & teal panels on yellow */}
       <section className="lh-chapter" id="story">
