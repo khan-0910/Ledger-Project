@@ -2,7 +2,7 @@
   "name": "Ledger — Student Finance",
   "short_name": "Ledger",
   "description": "Know what you can spend, what you should save, and what you shouldn't touch.",
-  "start_url": "/",
+  "start_url": "/Ledger-Project/",
   "display": "standalone",
   "background_color": "#faf8f2",
   "theme_color": "#101311",

@@ -132,15 +132,17 @@ function GlobalAddSheet() {
     return () => window.removeEventListener('ledger:open-add', fn)
   }, [])
   return <AnimatePresence>{open && <AddExpense key="add" onClose={() => setOpen(false)} />}</AnimatePresence>
-}
-
-export default function App() {
+}export default function App() {
   // The single-file preview build is served statically without SPA fallback,
-  // so it uses hash routing; normal builds keep clean URLs.
-  const Router = import.meta.env.MODE === 'singlefile' ? HashRouter : BrowserRouter
+  // so it uses hash routing; normal builds keep clean URLs. BrowserRouter
+  // needs the Pages repo path as basename so routes, links and navigations
+  // (including direct opens of /Ledger-Project/app/...) all resolve under it.
+  const Router =
+    import.meta.env.MODE === 'singlefile' ? HashRouter : BrowserRouter
+  const basename = import.meta.env.MODE === 'singlefile' ? undefined : import.meta.env.BASE_URL
 
   return (
-    <Router>
+    <Router basename={basename}>
       <ThemeProvider>
         <AppProvider>
           <ScrollToTop />
