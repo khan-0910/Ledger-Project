@@ -2098,3 +2098,170 @@
     background-attachment: local; /* gradient scrolls with content */
   }
 }
+
+
+/* ============================================================
+   GRADIENT REPAIR — scoped per-route fixes (no broad redesign)
+   Rule: a gradient must use same-palette stops or be replaced
+   by the route's solid background.
+
+   KEPT INTENTIONALLY: .shell-dash pink->rose bloom and
+   .shell-txns orange->peach bloom (verified good).
+
+   REVERTED TO SOLID: budgets/goals/analytics/recurring/settings
+   faded into gray/taupe; each now returns to its own solid
+   route canvas recovered from commit 1c53deb, sized so long and
+   short pages both fill correctly (fallback --pg solid).
+   ============================================================ */
+
+/* Budgets: solid warm cream-orange canvas */
+.shell-budgets {
+  background: #fdf1e0;
+}
+
+/* Goals: solid fresh green-mint canvas */
+.shell-goals {
+  background: #edf7ef;
+}
+
+/* Analytics: solid sky-blue canvas */
+.shell-analytics {
+  background: #ecf3fa;
+}
+
+/* Recurring: solid neutral warm-grey canvas (no purple) */
+.shell-recurring {
+  background: #f2f3f4;
+}
+
+/* Settings: solid composed neutral-teal canvas */
+.shell-settings {
+  background: #eef4f4;
+}
+
+/* The two good gradients keep their bloom but gain a solid
+   fallback colour for pages shorter than the gradient ramp. */
+.shell-dash { background-color: #f56ba4; }
+.shell-txns { background-color: #ff7b1c; }
+
+/* ============================================================
+   DASHBOARD PANELS — teal surfaces on the pink canvas
+   Primary balance panel: deep teal (flagship). Secondary
+   panels: lighter teal. Inks chosen for AA on each tier.
+   Text/controls/charts stay charcoal; only surfaces change.
+   ============================================================ */
+.shell-dash {
+  --dash-teal-900: #0e4c55;   /* flagship panel */
+  --dash-teal-700: #12707f;   /* secondary panels */
+  --dash-teal-800: #0d5b67;   /* deep accents */
+  --dash-teal-ink: #06333a;   /* darkest teal ink */
+  --dash-cream: #fffaf0;      /* detail cream */
+}
+/* Primary: the total-balance hero panel */
+.shell-dash .hero-balance {
+  background: var(--dash-teal-900);
+  border-color: #063a42;
+  color: var(--dash-cream);
+}
+.shell-dash .hero-balance .eyebrow,
+.shell-dash .hero-balance .hero-updated { color: #9fd9e2; }
+.shell-dash .hero-balance .progress-track { background: rgba(255, 250, 240, 0.18); }
+/* Flagship figure: warm yellow pops on deep teal */
+.shell-dash .hero-balance .hero-num { color: #ffd93d; }
+
+/* Secondary teal panels: strict savings, guilt-free, spending,
+   safe-to-spend, insights, recent list */
+.shell-dash .gf-card,
+.shell-dash .sts-card,
+.shell-dash .alloc-card,
+.shell-dash .insight-card,
+.shell-dash .stat-card,
+.shell-dash .txn-list { background: var(--dash-teal-700); border-color: #063a42; color: var(--dash-cream); }
+/* Ink on the 700 tier: deep charcoal-teal for AA */
+.shell-dash .gf-card, .shell-dash .sts-card,
+.shell-dash .alloc-card, .shell-dash .insight-card,
+.shell-dash .stat-card, .shell-dash .txn-list {
+  color: #eafcff;
+}
+.shell-dash .gf-card .card-title, .shell-dash .sts-card .sec-title,
+.shell-dash .alloc-card, .shell-dash .insight-card .card-title { color: #ffffff; }
+.shell-dash .faint, .shell-dash .txn-meta { color: rgba(234, 252, 255, 0.72); }
+/* Amounts: figures pop in warm yellow on both teal tiers; body copy stays cream */
+.shell-dash .gf-num, .shell-dash .gf-stat, .shell-dash .sts-num { color: #ffd93d; }
+.shell-dash .txn-amt, .shell-dash .detail-amt { color: #eafcff; }
+.shell-dash .txn-amt.pos .amt-real { color: #7be3b1; }
+/* Sub-headline + supporting copy on teal panels */
+.shell-dash .gf-card .muted, .shell-dash .sts-card .muted,
+.shell-dash .insight-card .muted { color: rgba(234, 252, 255, 0.82); }
+/* Segmented + inputs stay light for control affordance, sit on teal */
+.shell-dash .segmented { background: rgba(255, 250, 240, 0.12); border-color: rgba(234, 252, 255, 0.4); }
+.shell-dash .segment { color: #eafcff; }
+.shell-dash .segment.active { background: var(--dash-teal-900); color: #ffd93d; }
+
+/* ---- Dashboard teal panels: final cascade fixes ----
+   The 1641 block forces --surface-pg (white) onto alloc/gf/sts cards;
+   these scoped rules (later, higher specificity) convert Dashboard
+   surfaces to the teal family instead. Tokens only change HERE, so
+   Transactions and the other routes are untouched. */
+.shell-dash .alloc-card.a-green,
+.shell-dash .alloc-card.a-yellow,
+.shell-dash .gf-card,
+.shell-dash .sts-card,
+.shell-dash .insight-card.tone-green,
+.shell-dash .insight-card.tone-yellow,
+.shell-dash .insight-card.tone-blue,
+.shell-dash .insight-card.tone-red,
+.shell-dash .insight-card.tone-purple {
+  background: var(--dash-teal-700, var(--dash-teal-900));
+}
+
+/* Panel hierarchy: the flagship TOTAL BALANCE panel uses the deep
+   teal tier; everything else sits on the lighter teal. */
+.shell-dash .hero-balance.card-spotlight {
+  background-color: var(--dash-teal-900) !important;
+}
+
+/* Titles on the 700 tier: white (they read dark-on-teal would fail) */
+.shell-dash .gf-card .gf-title,
+.shell-dash .gf-card .card-title,
+.shell-dash .sts-card .sec-title,
+.shell-dash .sts-card .card-title,
+.shell-dash .alloc-card .card-title,
+.shell-dash .alloc-card .alloc-title { color: #ffffff; }
+
+/* ---- Final ink fix for teal panels ----
+   Figures on teal read best in warm yellow/cream. The dark-theme
+   :root[data-theme] .shell-dash .sts-num red rule outranks plain
+   class selectors, so re-assert at equal-or-higher specificity. */
+.shell-dash .alloc-val,
+:root[data-theme='dark'] .shell-dash .alloc-val,
+.shell-dash .gf-stat,
+.shell-dash .sts-num,
+:root[data-theme='dark'] .shell-dash .sts-num {
+  color: #ffd93d;
+}
+/* Supporting figures stay light cream */
+.shell-dash .alloc-val-sub, .shell-dash .gf-sub { color: #eafcff; }
+/* Segment pills keep legible inks */
+.shell-dash .segment.active { color: #ffd93d; }
+
+/* ---- Recent-activity list on teal: plum transcription → full cream.
+   The app-wide ".shell .txn-desc { color: var(--pg-text) }" ships
+   plum #4a1535; on the teal tier it borders on illegible, so the
+   scoped cream re-assert wins by cascade order (later block). */
+.shell-dash .txn-desc,
+.shell-dash .txn-desc:hover { color: #eafcff; }
+
+/* ---- GRADIENT REPAIR v2 — canvas/palette coherence fix ----
+   The 5 solid reverts above used the OLDEST pre-gradient canvases.
+   The panels/sidebars/inks actually shipped (and verified good in
+   the "FINAL per-route palettes" block) pair with the DARK canvases:
+     budgets #241505, goals #0d2019, analytics #0f1a30,
+     recurring blue #5e9de8, settings brown #4a2f1b.
+   Re-assert the route's established canvas so page background,
+   sidebar, panels and charts read as one palette. */
+.shell-budgets { background: #241505; }
+.shell-goals { background: #0d2019; }
+.shell-analytics { background: #0f1a30; }
+.shell-recurring { background: #5e9de8; }
+.shell-settings { background: #4a2f1b; }

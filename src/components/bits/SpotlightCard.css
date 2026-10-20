@@ -2,7 +2,8 @@
   position: relative;
   border-radius: 1.5rem;
   border: 1px solid #222;
-  background-color: #111;
+  /* Surface comes from the route theme (.card / .shell tokens), not this file.
+     Only the mouse-following spotlight overlay lives here. */
   padding: 2rem;
   overflow: hidden;
   --mouse-x: 50%;
