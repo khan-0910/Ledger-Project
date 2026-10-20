@@ -1974,16 +1974,15 @@
    Scoped so the homepage (.landing) is untouched.
    ============================================================ */
 
-/* ---- 1 · Canvas bloom: most shells already tint their --pg value.
-   Refine: body below the hero drifts toward the low-sat family
-   colour, giving the top strip the "loudest" moment. ---------- */
+/* ---- 1 · Canvas bloom REMOVED per request: all seven routes back
+   to their established SOLID canvas colours. The strong gradiated
+   washes (dash pink, txns orange) are gone; --pg is the single
+   source of truth again. -------------------------------------- */
 .shell-dash {
-  background:
-    linear-gradient(180deg, var(--pg) 0%, var(--pg) 240px, color-mix(in srgb, var(--pg) 62%, #fdf4f6) 420px, color-mix(in srgb, var(--pg) 30%, #fdf4f6) 100%);
+  background: var(--pg);
 }
 .shell-txns {
-  background:
-    linear-gradient(180deg, var(--pg) 0%, var(--pg) 240px, color-mix(in srgb, var(--pg) 55%, #fef6ec) 420px, color-mix(in srgb, var(--pg) 32%, #fef6ec) 100%);
+  background: var(--pg);
 }
 .shell-budgets {
   background:
@@ -2090,12 +2089,12 @@
 .shell-analytics .sc-label { color: #1b2c47; }
 .shell-analytics .muted { color: color-mix(in srgb, #1b2c47 88%, transparent); }
 
-/* Desktop-only tweak so the dark Mobile bar never collides with
-   the low bloom on routes with long pages */
+/* Gradient-era tweak no longer needed with solid canvases.
+   Kept as a harmless no-op only if gradients return later. */
 @media (min-width: 861px) {
   .shell-dash, .shell-txns, .shell-budgets, .shell-goals,
   .shell-analytics, .shell-recurring, .shell-settings {
-    background-attachment: local; /* gradient scrolls with content */
+    background-attachment: local;
   }
 }
 
@@ -2139,10 +2138,9 @@
   background: #eef4f4;
 }
 
-/* The two good gradients keep their bloom but gain a solid
-   fallback colour for pages shorter than the gradient ramp. */
-.shell-dash { background-color: #f56ba4; }
-.shell-txns { background-color: #ff7b1c; }
+/* The two good gradients were removed in the later "all solid"
+   request; the fallback colours above are now the primary canvas
+   values and agree with --pg. Nothing further needed here. */
 
 /* ============================================================
    DASHBOARD PANELS — teal surfaces on the pink canvas
