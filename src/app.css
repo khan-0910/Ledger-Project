@@ -2051,3 +2051,50 @@
 }
 .cat-parent .cat, .input, .select { border-radius: var(--radius-md); }  /* 16px */
 .chip, .sc-tag, .demo-badge { border-radius: 999px; }
+
+
+/* ============================================================
+   POLISH PASS 2 — points 6–10 (calm-upgrades, continued)
+   6. Breathing-room: consistent in-card padding rhythm
+   7. Budgets stat cards share one equal height
+   8. Budgets muted note legibility on the amber cards (AA)
+   9. Progress bars keep AA contrast in "near" (yellow-on-cream)
+   10. Analytics summary labels readable on the navy bloom
+   ============================================================ */
+
+/* ---- 6 · Breathing room: one padding rhythm for cards -------- */
+.shell .card, .shell .stat-card, .shell .set-card, .shell .goal-card,
+.shell .budget-card, .shell .insight-card, .shell .alloc-card,
+.shell .gf-card, .shell .sts-card, .shell .budget-total,
+.shell .unbudgeted { padding: 22px 26px; }
+.shell .txn-list { padding: 6px 12px 8px; }
+
+/* ---- 7 · Budgets: every stat card same height (align top) ---- */
+.budget-grid { align-items: stretch; }
+.budget-card { display: flex; flex-direction: column; }
+
+/* ---- 8 · Budgets muted notes: deep espresso (AA on amber) ---- */
+.shell-budgets .faint,
+.shell-budgets .bc-pct,
+.shell-budgets .bt-note,
+.shell-budgets .unbudgeted .faint { color: #6e3200; }
+
+/* ---- 9 · Progress readability: give every track an ink ring so
+   near-threshold fills (yellow) still register vs the surface --- */
+.progress-track { border: 2px solid var(--box-border, var(--sticker-border)); }
+.progress-fill { min-width: 6px; }
+
+/* ---- 10 · Analytics: summary/stat labels ≥AA on navy wash ---- */
+.shell-analytics .faint,
+.shell-analytics .legend-label,
+.shell-analytics .sc-label { color: #1b2c47; }
+.shell-analytics .muted { color: color-mix(in srgb, #1b2c47 88%, transparent); }
+
+/* Desktop-only tweak so the dark Mobile bar never collides with
+   the low bloom on routes with long pages */
+@media (min-width: 861px) {
+  .shell-dash, .shell-txns, .shell-budgets, .shell-goals,
+  .shell-analytics, .shell-recurring, .shell-settings {
+    background-attachment: local; /* gradient scrolls with content */
+  }
+}
