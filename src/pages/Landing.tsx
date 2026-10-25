@@ -183,7 +183,7 @@ function CursorBlob() {
       className="cursor-blob"
       aria-hidden="true"
       style={{ x: sx, y: sy }}
-      animate={{ scale: hot ? 2.4 : 1 }}
+      animate={{ scale: hot ? 3 : 1, opacity: hot ? 0.35 : 1 }}
       transition={{ type: 'spring', stiffness: 300, damping: 22 }}
     />
   )
@@ -322,10 +322,12 @@ function Hero({ onDemo }: { onDemo: () => void }) {
   const reduced = useReducedMotion()
   const ref = useRef<HTMLElement | null>(null)
   const { scrollYProgress } = useScroll({ target: ref, offset: ['start start', 'end start'] })
-  const phoneY = useTransform(scrollYProgress, [0, 1], [0, reduced ? 0 : -160])
-  const phoneScale = useTransform(scrollYProgress, [0, 1], [1, reduced ? 1 : 1.12])
-  const copyY = useTransform(scrollYProgress, [0, 1], [0, reduced ? 0 : 120])
-  const copyOpacity = useTransform(scrollYProgress, [0, 0.7], [1, reduced ? 1 : 0])
+  /* Copy drifts up and fades faster than the phone, so the two separate
+     on scroll (both directions) instead of sliding over each other. */
+  const phoneY = useTransform(scrollYProgress, [0, 1], [0, reduced ? 0 : 90])
+  const phoneScale = useTransform(scrollYProgress, [0, 1], [1, reduced ? 1 : 1.08])
+  const copyY = useTransform(scrollYProgress, [0, 1], [0, reduced ? 0 : -140])
+  const copyOpacity = useTransform(scrollYProgress, [0, 0.35], [1, reduced ? 1 : 0])
 
   /* Pointer parallax for the floating toasts. */
   const px = useSpring(0, { stiffness: 80, damping: 20 })
@@ -409,9 +411,10 @@ function Hero({ onDemo }: { onDemo: () => void }) {
         </motion.div>
       </motion.div>
 
+      {/* Scroll owns the outer layer, the entrance owns the inner one — never the same y. */}
+      <motion.div className="hero-stage" style={{ y: phoneY, scale: phoneScale }}>
       <motion.div
-        className="hero-stage"
-        style={{ y: phoneY, scale: phoneScale }}
+        className="hero-stage-in"
         initial={{ opacity: 0, y: 220 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 1.2, delay: 0.5, ease: EXPO }}
@@ -462,6 +465,7 @@ function Hero({ onDemo }: { onDemo: () => void }) {
             </motion.div>
           </motion.div>
         ))}
+      </motion.div>
       </motion.div>
 
       <PixelFloor progress={scrollYProgress} />
@@ -540,10 +544,8 @@ function StoryCaption({ progress, index, beat }: { progress: MotionValue<number>
   const [a, b, c, d] = beatWindow(index)
   const opacity = useTransform(progress, [a, b, c, d], beatOpacity(index))
   const y = useTransform(progress, [a, b, c, d], index === 0 ? [0, 0, 0, -40] : [60, 0, 0, -40])
-  const blur = useTransform(progress, [a, b, c, d], index === 0 ? [0, 0, 0, 8] : [8, 0, 0, 8])
-  const filter = useTransform(blur, (v) => `blur(${v}px)`)
   return (
-    <motion.div className="ms-caption" style={{ opacity, y, filter }}>
+    <motion.div className="ms-caption" style={{ opacity, y }}>
       <span className="ms-step">{beat.step}</span>
       <h3>{beat.label}</h3>
       <p>{beat.text}</p>
@@ -704,7 +706,6 @@ function ScatterCard({
     <motion.article
       className={`bento-card ${className}`}
       style={{ x, y, rotate, opacity }}
-      whileHover={reduced ? undefined : { y: -8, rotate: 0, transition: { type: 'spring', stiffness: 300, damping: 18 } }}
     >
       {children}
     </motion.article>
@@ -760,7 +761,7 @@ function GoalRing() {
 
 function Bento() {
   const ref = useRef<HTMLElement | null>(null)
-  const { scrollYProgress } = useScroll({ target: ref, offset: ['start end', 'start 0.15'] })
+  const { scrollYProgress } = useScroll({ target: ref, offset: ['start end', 'start 0.45'] })
   const p = useSpring(scrollYProgress, { stiffness: 120, damping: 26 })
   const narrow = useIsNarrow()
   const m = narrow ? 0.35 : 1

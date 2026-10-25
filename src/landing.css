@@ -82,8 +82,8 @@
 
 /* ---------- Cursor ---------- */
 .cursor-blob {
-  position: fixed; left: -14px; top: -14px; width: 28px; height: 28px;
-  border-radius: 50%; background: #fff; mix-blend-mode: difference;
+  position: fixed; left: -8px; top: -8px; width: 16px; height: 16px;
+  border-radius: 50%; background: var(--pink); border: 2px solid var(--ink);
   pointer-events: none; z-index: 200;
 }
 
@@ -295,7 +295,9 @@
 .b-recur { grid-area: recur; }
 .b-goal { grid-area: goal; }
 .b-csv { grid-area: csv; }
-.bento-card { border-radius: var(--r-lg); padding: 28px; min-height: 220px; position: relative; will-change: transform; }
+.bento-card { border-radius: var(--r-lg); padding: 28px; min-height: 220px; position: relative; transition: translate 0.45s var(--ease), box-shadow 0.45s var(--ease); }
+/* Hover lift uses `translate`, which composes with the scroll-driven transform instead of fighting it. */
+.bento-card:hover { translate: 0 -8px; box-shadow: 0 24px 40px -24px rgba(23, 20, 15, 0.5); }
 .bento-card h3 { font-family: var(--f-display); font-weight: 800; font-size: 26px; letter-spacing: -0.03em; margin-top: 14px; }
 .bento-card p { font-size: 15.5px; line-height: 1.5; margin-top: 8px; }
 .c-ink { background: var(--ink); color: var(--y); }

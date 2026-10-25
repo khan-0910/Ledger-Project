@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
-import { motion, AnimatePresence } from 'framer-motion'
+import { NavLink, useLocation, useNavigate, useOutlet } from 'react-router-dom'
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
 import { useApp } from '../lib/store'
 import { PrivacyToast, SwipeToasts } from './ui'
 
@@ -38,15 +38,81 @@ function pageTheme(pathname: string): string {
   return 'dash'
 }
 
+/** Per-route canvas: colour, whether the canvas is dark, card tone, and the drifting backdrop word. */
+const CANVAS: Record<string, { color: string; dark: boolean; card: 'dark' | 'light'; word: string }> = {
+  dash: { color: '#ffd93d', dark: false, card: 'dark', word: 'where it stands ✦ ' },
+  txns: { color: '#a6e4df', dark: false, card: 'dark', word: 'every rupee ✦ ' },
+  budgets: { color: '#ff4f81', dark: false, card: 'dark', word: "what's left ✦ " },
+  goals: { color: '#0a4f57', dark: true, card: 'light', word: 'save it up ✦ ' },
+  analytics: { color: '#17140f', dark: true, card: 'light', word: 'the big picture ✦ ' },
+  recurring: { color: '#ffc6d6', dark: false, card: 'dark', word: 'no surprises ✦ ' },
+  settings: { color: '#ffe873', dark: false, card: 'dark', word: 'your rules ✦ ' },
+}
+
+/** Freezes the outlet for an exiting page so it can animate out with its old content. */
+function FrozenOutlet() {
+  const outlet = useOutlet()
+  const [frozen] = useState(outlet)
+  return frozen
+}
+
 export default function Shell() {
   const { pathname } = useLocation()
   const theme = pageTheme(pathname)
+  const canvas = CANVAS[theme]
+  const reduced = useReducedMotion()
+  const mainRef = useRef<HTMLElement>(null)
+
+  /* Pointer glare: one delegated listener feeds the hovered card its local coordinates. */
+  useEffect(() => {
+    const main = mainRef.current
+    if (!main || reduced) return
+    const move = (e: PointerEvent) => {
+      const card = (e.target as HTMLElement | null)?.closest<HTMLElement>('.card')
+      if (!card) return
+      const r = card.getBoundingClientRect()
+      card.style.setProperty('--mx', `${e.clientX - r.left}px`)
+      card.style.setProperty('--my', `${e.clientY - r.top}px`)
+    }
+    main.addEventListener('pointermove', move, { passive: true })
+    return () => main.removeEventListener('pointermove', move)
+  }, [reduced])
+
   return (
-    <div className={`shell shell-${theme}`} data-page={theme}>
+    <div
+      className={`shell shell-${theme}`}
+      data-page={theme}
+      data-canvas={canvas.dark ? 'dark' : 'light'}
+      data-card={canvas.card}
+      data-word={canvas.word.repeat(6)}
+    >
       <Sidebar />
-      <main className="main" id="main">
-        <Outlet />
+      <main className="main" id="main" ref={mainRef}>
+        <AnimatePresence mode="wait" initial={false}>
+          <motion.div
+            key={pathname}
+            className="route-stage"
+            initial={reduced ? { opacity: 0 } : { opacity: 0, y: 70, rotate: 1.2, scale: 0.97 }}
+            animate={{ opacity: 1, y: 0, rotate: 0, scale: 1 }}
+            exit={reduced ? { opacity: 0 } : { opacity: 0, y: -50, scale: 0.98 }}
+            transition={{ type: 'spring', stiffness: 220, damping: 26, opacity: { duration: 0.25 } }}
+          >
+            <FrozenOutlet />
+          </motion.div>
+        </AnimatePresence>
       </main>
+      {/* Colour curtain: sweeps up in the new page's canvas colour on every route change. */}
+      {!reduced && (
+        <motion.div
+          key={`curtain-${pathname}`}
+          className="route-curtain"
+          aria-hidden="true"
+          style={{ background: canvas.color }}
+          initial={{ y: '100%' }}
+          animate={{ y: ['100%', '0%', '-100%'] }}
+          transition={{ duration: 0.8, times: [0, 0.42, 1], ease: [0.76, 0, 0.24, 1] }}
+        />
+      )}
       <BottomNav />
       <PrivacyToast />
       <SwipeToasts />

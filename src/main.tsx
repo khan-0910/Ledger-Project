@@ -2,6 +2,7 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App'
 import './index.css'
+import './app-theme.css'
 import { initPrivacy } from './lib/privacy'
 
 // Privacy must be decided before first paint of any money UI.

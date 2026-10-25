@@ -28,17 +28,9 @@ function ScrollToTop() {
   return null
 }
 
-/** Wraps each routed page in a springy enter transition (exit handled at shell level). */
+/** Route slot. Enter/exit motion and the colour curtain live in the Shell. */
 function Page({ children }: { children: React.ReactNode }) {
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 14 }}
-      animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
-      transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
-    >
-      {children}
-    </motion.div>
-  )
+  return <>{children}</>
 }
 
 /**
