@@ -4,14 +4,21 @@ import type { DbEvent } from './types'
 import { applyEvent, delay, demoAuth, demoDb, demoSeedData, freshData } from './db/demo'
 import { EMAIL_RE, clearFailures, lockoutMessage, passwordProblem, recordFailure } from './security'
 
-import { auth as sbAuth, db as sbDb, supabaseEnabled } from './db/supabase'
+import { auth as sbAuth, db as sbDb, supabase, supabaseEnabled } from './db/supabase'
+import {
+  VaultConflict, cacheKey, cachedKey, createKeys, destroyVault, fetchKeyRow, forgetKeys, loadVault,
+  rewrapPassword, rotateRecoveryCode, saveVault, unlockWithPassword, unlockWithRecovery,
+} from './vault'
 import { toMinor } from './money'
 import { todayISO } from './dates'
 import { hideAll, initPrivacy } from './privacy'
 
 export type SessionUser = { id: string; email: string; name: string; mode: 'demo' | 'supabase' }
 
-export type SessionStage = 'loading' | 'signed-out' | 'onboarding' | 'ready'
+export type SessionStage = 'loading' | 'signed-out' | 'locked' | 'onboarding' | 'ready'
+
+/** Why the data is locked: just needs the password, or the key predates a password reset. */
+export type LockMode = 'password' | 'recovery'
 
 export interface Toast {
   id: number
@@ -35,6 +42,14 @@ interface AppContextValue {
   sendReset: (email: string) => Promise<string | null>
   updatePassword: (pw: string) => Promise<string | null>
   signOut: () => Promise<void>
+  lockMode: LockMode
+  recoveryCode: string | null
+  unlockSession: (password: string) => Promise<string | null>
+  recoverWithCode: (code: string, newPassword: string) => Promise<string | null>
+  startFresh: (newPassword: string) => Promise<string | null>
+  makeRecoveryCode: () => Promise<string | null>
+  ackRecoveryCode: () => void
+  deleteAccount: () => Promise<string | null>
   completeOnboarding: (p: { name: string; total: number; strict: number; guiltFree: number }) => Promise<void>
   dispatch: (event: DbEvent) => Promise<void>
   updateProfile: (patch: Partial<Profile>) => Promise<void>
@@ -101,7 +116,24 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       let u: SessionUser | null = null
       if (supabaseEnabled) {
         const su = await sbAuth.getUser()
-        if (su) u = { id: su.id, email: su.email, name: su.name, mode: 'supabase' }
+        if (su) {
+          const su2: SessionUser = { id: su.id, email: su.email, name: su.name, mode: 'supabase' }
+          // This device already holds the data key: open straight away.
+          const dk = await cachedKey(su2.id)
+          if (dk) {
+            try {
+              await openVault(su2, dk)
+              return
+            } catch {
+              /* stale key: fall through to the unlock screen */
+            }
+          }
+          if (!alive) return
+          setUser(su2)
+          setLockMode('password')
+          setStage('locked')
+          return
+        }
       }
       if (!u) {
         const du = demoAuth.currentUser()
@@ -138,36 +170,99 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   const hydrate = useCallback(async (u: SessionUser) => {
-    if (u.mode === 'demo') {
-      const du = demoAuth.currentUser()
-      const stored = du ? demoDb.load(du.id) : null
-      const d = stored ?? freshData(u.name, u.email)
-      demoDb.save(u.id, d)
-      applyData(d, u)
-    } else {
-      const d = await sbDb.loadAll(u.id)
-      if (!d) {
-        // First Supabase login: create profile row
-        const profile: Profile = {
-          id: u.id,
-          name: u.name || u.email.split('@')[0],
-          email: u.email,
-          onboarded: false,
-          currency: 'INR',
-          totalBalanceMinor: 0,
-          strictSavingsMinor: 0,
-          guiltFreeMinor: 0,
-          guiltFreeCycleStart: todayISO(),
-        }
-        await sbDb.saveProfile(u.id, profile)
-        await sbDb.saveSettings(u.id, { balanceVisibility: 'always-hide', hideOnLoad: true })
-        applyData({ profile, settings: { balanceVisibility: 'always-hide', hideOnLoad: true }, txns: [], budgets: [], goals: [], recurring: [] }, u)
-        return
-      }
-      applyData(d, u)
-    }
+    const du = demoAuth.currentUser()
+    const stored = du ? demoDb.load(du.id) : null
+    const d = stored ?? freshData(u.name, u.email)
+    demoDb.save(u.id, d)
+    applyData(d, u)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  /* ----- encrypted vault (Supabase mode) ----- */
+  const dkRef = useRef<CryptoKey | null>(null)
+  const versionRef = useRef(0)
+  const saveChain = useRef<Promise<unknown>>(Promise.resolve())
+  const [lockMode, setLockMode] = useState<LockMode>('password')
+  const [recoveryCode, setRecoveryCode] = useState<string | null>(null)
+
+  const openVault = useCallback(async (u: SessionUser, dk: CryptoKey) => {
+    dkRef.current = dk
+    await cacheKey(u.id, dk)
+    let doc = await loadVault(u.id, dk)
+    if (!doc) {
+      // First unlock: carry over any old plain-text rows, then wipe them from the server.
+      const old = await sbDb.loadAll(u.id).catch(() => null)
+      const fresh = freshData(u.name || u.email.split('@')[0], u.email)
+      const d: LedgerData = old?.profile.onboarded ? old : fresh
+      d.profile = { ...d.profile, id: u.id, email: u.email }
+      try {
+        const v = await saveVault(u.id, dk, d, 0)
+        doc = { data: d, version: v }
+      } catch (e) {
+        if (!(e instanceof VaultConflict)) throw e
+        doc = await loadVault(u.id, dk) // another device made it first
+        if (!doc) throw e
+      }
+      if (old) {
+        await sbDb.wipeData(u.id).catch(() => {})
+        await sbDb.saveProfile(u.id, { name: '', totalBalanceMinor: 0, strictSavingsMinor: 0, guiltFreeMinor: 0 }).catch(() => {})
+      }
+    }
+    versionRef.current = doc.version
+    applyData(doc.data, u)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  /** Password is known (login/signup): open the vault, or set up keys the first time. */
+  const unlock = useCallback(async (u: SessionUser, password: string): Promise<string | null> => {
+    try {
+      const row = await fetchKeyRow(u.id)
+      if (!row) {
+        const k = await createKeys(u.id, password)
+        setRecoveryCode(k.recoveryCode)
+        await openVault(u, k.dk)
+        return null
+      }
+      const dk = await unlockWithPassword(row, password)
+      if (dk) {
+        await openVault(u, dk)
+        return null
+      }
+      // Login worked, but the data key is still locked with the old password (reset elsewhere).
+      setUser(u)
+      setLockMode('recovery')
+      setStage('locked')
+      return null
+    } catch {
+      return "Couldn't open your data. Check your connection and try again."
+    }
+  }, [openVault])
+
+  /** Save the whole ledger: local in demo mode, encrypted blob in Supabase mode. */
+  const persist = useCallback(async (u: SessionUser, next: LedgerData) => {
+    if (u.mode === 'demo') {
+      demoDb.save(u.id, next)
+      return
+    }
+    const dk = dkRef.current
+    if (!dk) throw new Error('locked')
+    const job = saveChain.current.catch(() => {}).then(async () => {
+      try {
+        versionRef.current = await saveVault(u.id, dk, next, versionRef.current)
+      } catch (e) {
+        if (!(e instanceof VaultConflict)) throw e
+        const doc = await loadVault(u.id, dk)
+        if (doc) {
+          versionRef.current = doc.version
+          settingsRef.current = doc.data.settings
+          setData(doc.data)
+        }
+        toast('info', 'Updated from another device. Please redo your last change.')
+      }
+    })
+    saveChain.current = job
+    await job
+  }, [toast])
 
   function applyData(d: LedgerData, u: SessionUser) {
     setData(d)
@@ -193,8 +288,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       }
       clearFailures(email)
       const su = await sbAuth.getUser()
-      if (su) await hydrate({ id: su.id, email: su.email, name: su.name, mode: 'supabase' })
-      return null
+      return su ? unlock({ id: su.id, email: su.email, name: su.name, mode: 'supabase' }, password) : null
     }
     try {
       await delay(450)
@@ -206,7 +300,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       recordFailure(email)
       return lockoutMessage(email) ?? (e instanceof Error ? e.message : 'Could not sign in.')
     }
-  }, [hydrate])
+  }, [hydrate, unlock])
 
   const signUp = useCallback(
     async (email: string, password: string, name: string): Promise<{ error: string | null; needsConfirm: boolean }> => {
@@ -218,8 +312,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         if (r.error) return { error: r.error, needsConfirm: false }
         if (r.needsConfirm) return { error: null, needsConfirm: true }
         const su = await sbAuth.getUser()
-        if (su) await hydrate({ id: su.id, email: su.email, name: su.name, mode: 'supabase' })
-        return { error: null, needsConfirm: false }
+        const err = su ? await unlock({ id: su.id, email: su.email, name: name || su.name, mode: 'supabase' }, password) : null
+        return { error: err, needsConfirm: false }
       }
       await delay(500)
       try {
@@ -230,7 +324,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         return { error: e instanceof Error ? e.message : 'Could not create account.', needsConfirm: false }
       }
     },
-    [hydrate],
+    [hydrate, unlock],
   )
 
   const demoSignIn = useCallback(
@@ -270,21 +364,118 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (weak) return weak
     if (supabaseEnabled) {
       const r = await sbAuth.updatePassword(pw)
-      return r.error ?? null
+      if (r.error) return r.error
+      // Re-lock the data key with the new password so the next login opens it.
+      const dk = dkRef.current ?? (user ? await cachedKey(user.id) : null)
+      if (dk && user) await rewrapPassword(user.id, dk, pw)
+      return null
     }
     await delay(400)
     const u = demoAuth.currentUser()
     if (u) await demoAuth.setPassword(u.id, pw)
     return null
-  }, [user?.email])
+  }, [user])
 
   const signOut = useCallback(async () => {
-    if (user?.mode === 'supabase') await sbAuth.signOut()
-    else demoAuth.signOut()
+    if (user?.mode === 'supabase') {
+      await forgetKeys()
+      dkRef.current = null
+      versionRef.current = 0
+      await sbAuth.signOut()
+    } else demoAuth.signOut()
     setUser(null)
     setData(null)
     hideAll()
     setStage('signed-out')
+  }, [user])
+
+  /* ----- unlock / recovery (Supabase mode) ----- */
+  const unlockSession = useCallback(async (password: string): Promise<string | null> => {
+    if (!user) return 'Session expired. Log in again.'
+    const locked = lockoutMessage(user.email)
+    if (locked) return locked
+    const r = await sbAuth.signIn(user.email, password)
+    if (r.error) {
+      recordFailure(user.email)
+      return lockoutMessage(user.email) ?? r.error
+    }
+    clearFailures(user.email)
+    return unlock(user, password)
+  }, [user, unlock])
+
+  /** Sets the account password, skipping the call if it already is that password. */
+  const ensurePassword = useCallback(async (email: string, pw: string): Promise<string | null> => {
+    const already = await sbAuth.signIn(email, pw)
+    if (already.ok) return null
+    const r = await sbAuth.updatePassword(pw)
+    return r.error ?? null
+  }, [])
+
+  const recoverWithCode = useCallback(async (code: string, newPassword: string): Promise<string | null> => {
+    if (!user) return 'Session expired. Log in again.'
+    const weak = passwordProblem(newPassword, user.email)
+    if (weak) return weak
+    try {
+      const row = await fetchKeyRow(user.id)
+      if (!row) return 'No saved key found for this account. Use "Start fresh" below.'
+      const dk = await unlockWithRecovery(row, code)
+      if (!dk) return "That recovery code doesn't match. Check it and try again."
+      const err = await ensurePassword(user.email, newPassword)
+      if (err) return err
+      await rewrapPassword(user.id, dk, newPassword)
+      await openVault(user, dk)
+      return null
+    } catch {
+      return "Couldn't unlock. Check your connection and try again."
+    }
+  }, [user, ensurePassword, openVault])
+
+  /** Both password and recovery code lost: wipe the unreadable data and begin again. */
+  const startFresh = useCallback(async (newPassword: string): Promise<string | null> => {
+    if (!user) return 'Session expired. Log in again.'
+    const weak = passwordProblem(newPassword, user.email)
+    if (weak) return weak
+    try {
+      const err = await ensurePassword(user.email, newPassword)
+      if (err) return err
+      await destroyVault(user.id)
+      const k = await createKeys(user.id, newPassword)
+      setRecoveryCode(k.recoveryCode)
+      await openVault(user, k.dk)
+      return null
+    } catch {
+      return "Couldn't reset. Check your connection and try again."
+    }
+  }, [user, ensurePassword, openVault])
+
+  const makeRecoveryCode = useCallback(async (): Promise<string | null> => {
+    if (!user || user.mode !== 'supabase' || !dkRef.current) return 'Recovery codes are only for cloud accounts.'
+    try {
+      setRecoveryCode(await rotateRecoveryCode(user.id, dkRef.current))
+      return null
+    } catch {
+      return "Couldn't make a new code. Try again."
+    }
+  }, [user])
+
+  const ackRecoveryCode = useCallback(() => setRecoveryCode(null), [])
+
+  const deleteAccount = useCallback(async (): Promise<string | null> => {
+    if (!user) return null
+    if (user.mode === 'supabase') {
+      const { error } = await supabase!.rpc('delete_my_account')
+      if (error) return "Couldn't delete your account. Try again."
+      await forgetKeys()
+      dkRef.current = null
+      await sbAuth.signOut().catch(() => {})
+    } else {
+      demoAuth.deleteUser(user.id)
+    }
+    setUser(null)
+    setData(null)
+    hideAll()
+    setStage('signed-out')
+    return null
   }, [user])
 
   /* ----- onboarding ----- */
@@ -301,15 +492,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       }
       const next = applyEvent(data, { kind: 'patchProfile', profile })
       setData(next)
-      if (user.mode === 'demo') {
-        demoAuth.setOnboarded(user.id)
-        demoDb.save(user.id, next)
-      } else {
-        await sbDb.saveProfile(user.id, profile)
-      }
+      if (user.mode === 'demo') demoAuth.setOnboarded(user.id)
+      await persist(user, next)
       setStage('ready')
     },
-    [user, data],
+    [user, data, persist],
   )
   /* ----- data actions ----- */
   const dispatch = useCallback(
@@ -317,9 +504,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       if (!user || !data) return
       const next = applyEvent(data, event)
       setData(next)
-      if (user.mode === 'demo') demoDb.save(user.id, next)
+      await persist(user, next)
     },
-    [user, data],
+    [user, data, persist],
   )
 
   const updateProfile = useCallback(
@@ -327,10 +514,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       if (!user || !data) return
       const next = applyEvent(data, { kind: 'patchProfile', profile: patch })
       setData(next)
-      if (user.mode === 'demo') demoDb.save(user.id, next)
-      else await sbDb.saveProfile(user.id, patch)
+      await persist(user, next)
     },
-    [user, data],
+    [user, data, persist],
   )
 
   const updateSettings = useCallback(async (patch: Partial<Settings>) => {
@@ -338,9 +524,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const next = applyEvent(data, { kind: 'patchSettings', settings: patch })
     setData(next)
     settingsRef.current = next.settings
-    if (user.mode === 'demo') demoDb.save(user.id, next)
-    else await sbDb.saveSettings(user.id, next.settings)
-  }, [user, data])
+    await persist(user, next)
+  }, [user, data, persist])
   updateSettingsRef.current = updateSettings
 
   const upsertTxn = useCallback(
@@ -350,13 +535,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const next = applyEvent(data, { kind: 'upsertTxn', txn })
       setData(next)
       try {
-        if (user.mode === 'demo') {
-          demoDb.save(user.id, next)
-        } else {
-          const exists = prev.txns.some((t) => t.id === txn.id)
-          if (exists) await sbDb.updateTxn(user.id, txn)
-          else await sbDb.insertTxn(user.id, txn)
-        }
+        await persist(user, next)
         return true
       } catch {
         setData(prev) // rollback
@@ -365,7 +544,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [user, data, toast],
+    [user, data, toast, persist],
   )
 
   const deleteTxn = useCallback(
@@ -375,8 +554,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const next = applyEvent(data, { kind: 'removeTxn', id })
       setData(next)
       try {
-        if (user.mode === 'demo') demoDb.save(user.id, next)
-        else await sbDb.deleteTxn(user.id, id)
+        await persist(user, next)
         return true
       } catch {
         setData(prev)
@@ -385,7 +563,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [user, data, toast],
+    [user, data, toast, persist],
   )
 
   const setBudgets = useCallback(
@@ -393,10 +571,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       if (!user || !data) return
       const next = applyEvent(data, { kind: 'setBudgets', budgets })
       setData(next)
-      if (user.mode === 'demo') demoDb.save(user.id, next)
-      else await sbDb.replaceBudgets(user.id, budgets)
+      await persist(user, next)
     },
-    [user, data],
+    [user, data, persist],
   )
 
   const setGoals = useCallback(
@@ -404,10 +581,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       if (!user || !data) return
       const next = applyEvent(data, { kind: 'setGoals', goals })
       setData(next)
-      if (user.mode === 'demo') demoDb.save(user.id, next)
-      else await sbDb.replaceGoals(user.id, goals)
+      await persist(user, next)
     },
-    [user, data],
+    [user, data, persist],
   )
 
   const setEssentials = useCallback(
@@ -415,9 +591,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       if (!user || !data) return
       const next = applyEvent(data, { kind: 'setEssentials', essentials: list })
       setData(next)
-      if (user.mode === 'demo') demoDb.save(user.id, next)
+      await persist(user, next)
     },
-    [user, data],
+    [user, data, persist],
   )
 
   const setRecurring = useCallback(
@@ -425,19 +601,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       if (!user || !data) return
       const next = applyEvent(data, { kind: 'setRecurring', recurring: list })
       setData(next)
-      if (user.mode === 'demo') demoDb.save(user.id, next)
-      else await sbDb.replaceRecurring(user.id, list)
+      await persist(user, next)
     },
-    [user, data],
+    [user, data, persist],
   )
 
   const wipeData = useCallback(async () => {
     if (!user || !data) return
     const next: LedgerData = { ...data, txns: [], budgets: [], goals: [], recurring: [] }
     setData(next)
-    if (user.mode === 'demo') demoDb.save(user.id, next)
-    else await sbDb.wipeData(user.id)
-  }, [user, data])
+    await persist(user, next)
+  }, [user, data, persist])
 
   const reseedDemo = useCallback(() => {
     if (!user) return
@@ -453,12 +627,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       stage, user, data, reducedMotion, toasts,
       toast, dismissToast,
       signIn, signUp, demoSignIn, sendReset, updatePassword, signOut,
+      lockMode, recoveryCode, unlockSession, recoverWithCode, startFresh, makeRecoveryCode, ackRecoveryCode, deleteAccount,
       completeOnboarding, dispatch, updateProfile, updateSettings,
       upsertTxn, deleteTxn, setBudgets, setGoals, setRecurring, setEssentials,
       wipeData, reseedDemo,
     }),
     [stage, user, data, reducedMotion, toasts, toast, dismissToast,
       signIn, signUp, demoSignIn, sendReset, updatePassword, signOut, completeOnboarding, dispatch,
+      lockMode, recoveryCode, unlockSession, recoverWithCode, startFresh, makeRecoveryCode, ackRecoveryCode, deleteAccount,
       updateProfile, updateSettings, upsertTxn, deleteTxn, setBudgets, setGoals, setRecurring, setEssentials, wipeData, reseedDemo],
   )
 

@@ -1286,6 +1286,7 @@ function Footer({ onDemo }: { onDemo: () => void }) {
           <Link to="/signup">Get started</Link>
           <Link to="/login">Log in</Link>
           <button type="button" onClick={onDemo}>Try the demo</button>
+          <Link to="/privacy">Privacy</Link>
         </nav>
       </div>
       {/* Letters sit clipped below the fold line, so the row (not each letter) is the in-view trigger. */}

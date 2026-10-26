@@ -1,6 +1,6 @@
 import React, { useRef, useState } from 'react'
 import { useApp } from '../lib/store'
-import { supabaseEnabled, db as sbDb } from '../lib/db/supabase'
+import { supabaseEnabled } from '../lib/db/supabase'
 import { parseAmountInput, formatINR } from '../lib/money'
 import { EXPENSE_CATEGORIES } from '../lib/categories'
 import { downloadText, detectMap, rowsToDrafts, splitCsv, toCsv, type CsvDraft, type RawCsvRow } from '../lib/csv'
@@ -154,7 +154,61 @@ function ProfileTab() {
         </div>
         {pwErr && <p className="form-err" role="alert">{pwErr}</p>}
       </section>
+
+      <AccountSafety />
     </div>
+  )
+}
+
+/* ================= RECOVERY CODE + DELETE ACCOUNT ================= */
+
+function AccountSafety() {
+  const { user, makeRecoveryCode, deleteAccount, toast } = useApp()
+  const [confirm, setConfirm] = useState('')
+  const [busy, setBusy] = useState(false)
+  const cloud = user?.mode === 'supabase'
+
+  async function newCode() {
+    setBusy(true)
+    const err = await makeRecoveryCode()
+    setBusy(false)
+    if (err) toast('error', err)
+  }
+
+  async function remove() {
+    if (confirm.trim().toUpperCase() !== 'DELETE') return toast('error', 'Type DELETE to confirm.')
+    setBusy(true)
+    const err = await deleteAccount()
+    setBusy(false)
+    if (err) toast('error', err)
+  }
+
+  return (
+    <>
+      {cloud && (
+        <section className="card set-card">
+          <h2 className="card-title">Recovery code</h2>
+          <p className="faint set-hint">
+            Your data is end-to-end encrypted. If you forget your password, your recovery code is the only way back in.
+            Lost it? Make a new one. The old code stops working.
+          </p>
+          <button className="btn btn-soft" onClick={() => void newCode()} disabled={busy}>Make a new recovery code</button>
+        </section>
+      )}
+      <section className="card set-card">
+        <h2 className="card-title">Delete account</h2>
+        <p className="faint set-hint">
+          {cloud
+            ? 'Permanently deletes your account, encryption keys and all your data from our servers. This cannot be undone. Export a CSV first if you want a copy.'
+            : 'Removes this demo account and its data from this browser.'}
+        </p>
+        <div className="set-inline">
+          <input className="input" placeholder="Type DELETE" value={confirm} onChange={(e) => setConfirm(e.target.value)} aria-label="Type DELETE to confirm" autoComplete="off" />
+          <button className="btn btn-danger" onClick={() => void remove()} disabled={busy}>{busy ? 'Working…' : 'Delete my account'}</button>
+        </div>
+        <p className="faint set-hint" style={{ marginTop: 10 }}><a href={import.meta.env.BASE_URL + 'privacy'}>Read the privacy policy</a></p>
+      </section>
+    </>
   )
 }
 
@@ -368,11 +422,8 @@ function DataTab() {
       note: d.note || undefined,
       createdAt: new Date().toISOString(),
     }))
-    dispatch({ kind: 'setTxns', txns: [...txnsNew, ...txns] })
-    // Supabase users persist via insert path
-    if (user?.mode === 'supabase') {
-      for (const t of txnsNew) await sbDb.insertTxn(user.id, t).catch(() => {})
-    }
+    // Saved through the store, so cloud accounts stay encrypted.
+    await dispatch({ kind: 'setTxns', txns: [...txnsNew, ...txns] })
     setBusy(false)
     setRows(null); setDrafts([]); setMap({})
     toast('success', `Imported ${txnsNew.length} transaction${txnsNew.length === 1 ? '' : 's'}.`)

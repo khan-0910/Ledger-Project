@@ -101,6 +101,9 @@ export default function Signup() {
         </button>
       </form>
 
+      <p className="faint" style={{ fontSize: 13, marginTop: 12 }}>
+        By signing up you agree to our <Link to="/privacy">privacy policy</Link>. Your data is encrypted on your device.
+      </p>
       <p className="auth-switch">
         Already have an account? <Link to="/login">Log in</Link>
       </p>

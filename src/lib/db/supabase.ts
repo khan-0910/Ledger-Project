@@ -111,7 +111,7 @@ export const auth = {
       email,
       password,
       // Confirm link must land back on the Pages path, not the bare domain.
-      options: { data: { name }, emailRedirectTo: new globalThis.URL(import.meta.env.BASE_URL, window.location.origin).href },
+      options: { emailRedirectTo: new globalThis.URL(import.meta.env.BASE_URL, window.location.origin).href },
     })
     if (error) return { ok: false, needsConfirm: false, error: humanAuthError(error.message) }
     return { ok: true, needsConfirm: !data.session }

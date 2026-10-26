@@ -572,3 +572,11 @@
 .onb-breakdown .alloc-card * { color: #17140f; }
 .onb-breakdown .alloc-card .faint,
 .onb-breakdown .alloc-card [class*='note'] { color: #4a4438; }
+
+/* Unlock screen text buttons + privacy page */
+.link-btn { background: none; border: 0; padding: 0; font: inherit; font-weight: 700; color: inherit; text-decoration: underline; cursor: pointer; }
+.privacy-doc h2 { font-size: 20px; margin: 28px 0 8px; }
+.privacy-doc ul { padding-left: 20px; display: grid; gap: 6px; }
+.privacy-doc a { color: inherit; font-weight: 700; }
+.auth-page .card.privacy-doc { background: #fffaf0 !important; color: #17140f; }
+.auth-page .card.privacy-doc .faint, .auth-page .card.privacy-doc p, .auth-page .card.privacy-doc li { color: #2b261d; }

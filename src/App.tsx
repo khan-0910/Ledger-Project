@@ -11,6 +11,9 @@ import Signup from './pages/Signup'
 import Forgot from './pages/Forgot'
 import Reset from './pages/Reset'
 import Onboarding from './pages/Onboarding'
+import Unlock from './pages/Unlock'
+import Privacy from './pages/Privacy'
+import RecoveryCodeModal from './components/RecoveryCode'
 import Dashboard from './pages/Dashboard'
 import Transactions from './pages/Transactions'
 import Budgets from './pages/Budgets'
@@ -43,6 +46,7 @@ function AnimatedRoutes() {
       {/* The public homepage lives at "/" for everyone — signed-out AND
           signed-in. No auth-dependent redirect. The app is at /app. */}
       <Route path="/" element={<Landing />} />
+      <Route path="/privacy" element={<Privacy />} />
       <Route path="/login" element={<Navigate to="/app" replace />} />
       <Route path="/signup" element={<Navigate to="/app" replace />} />
       <Route path="/reset" element={<Navigate to="/app/settings" replace />} />
@@ -98,8 +102,18 @@ function StageRouter() {
         <Route path="/signup" element={<Signup />} />
         <Route path="/forgot" element={<Forgot />} />
         <Route path="/reset" element={<Reset />} />
+        <Route path="/privacy" element={<Privacy />} />
         <Route path="/app/*" element={<Navigate to="/login" replace />} />
         <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    )
+  }
+
+  if (stage === 'locked') {
+    return (
+      <Routes>
+        <Route path="/privacy" element={<Privacy />} />
+        <Route path="*" element={<Unlock />} />
       </Routes>
     )
   }
@@ -107,6 +121,7 @@ function StageRouter() {
   if (stage === 'onboarding') {
     return (
       <Routes>
+        <Route path="/privacy" element={<Privacy />} />
         <Route path="*" element={<Onboarding />} />
       </Routes>
     )
@@ -140,6 +155,7 @@ function GlobalAddSheet() {
           <ScrollToTop />
           <StageRouter />
           <GlobalAddSheet />
+          <RecoveryCodeModal />
         </AppProvider>
       </ThemeProvider>
     </Router>

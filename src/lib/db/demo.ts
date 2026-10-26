@@ -111,6 +111,12 @@ export const demoAuth = {
   signOut(): void {
     localStorage.removeItem(LS_SESSION)
   },
+  /** Remove the account and all its data from this browser. */
+  deleteUser(id: string): void {
+    writeUsers(readUsers().filter((u) => u.id !== id))
+    localStorage.removeItem(LS_PREFIX + id)
+    localStorage.removeItem(LS_SESSION)
+  },
 }
 
 export const demoDb = {
