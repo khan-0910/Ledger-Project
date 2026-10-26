@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useApp } from '../lib/store'
+import { passwordProblem } from '../lib/security'
 import { AuthLayout } from './Login'
 
 export default function Reset() {
@@ -13,7 +14,7 @@ export default function Reset() {
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
-    if (pw.length < 6) return setErr('Password must be at least 6 characters.')
+    { const weak = passwordProblem(pw); if (weak) return setErr(weak) }
     if (pw !== pw2) return setErr("Passwords don't match.")
     setErr(null)
     setBusy(true)
@@ -34,7 +35,7 @@ export default function Reset() {
       <form className="auth-form" onSubmit={(e) => void submit(e)}>
         <div>
           <label className="field-label" htmlFor="rs-pw">New password</label>
-          <input id="rs-pw" className="input" type="password" autoComplete="new-password" placeholder="At least 6 characters" value={pw} onChange={(e) => setPw(e.target.value)} />
+          <input id="rs-pw" className="input" type="password" autoComplete="new-password" placeholder="At least 8 characters" value={pw} onChange={(e) => setPw(e.target.value)} />
         </div>
         <div>
           <label className="field-label" htmlFor="rs-pw2">Confirm new password</label>

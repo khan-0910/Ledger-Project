@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { useApp } from '../lib/store'
 import { AuthLayout } from './Login'
+import { passwordProblem } from '../lib/security'
 import { Glyph } from '../components/bits/Glyph'
 
 function pwScore(pw: string): number {
@@ -32,7 +33,7 @@ export default function Signup() {
     e.preventDefault()
     if (!name.trim()) return setErr('Tell us your name — it makes Ledger feel yours.')
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) return setErr('That email doesn\u2019t look right.')
-    if (pw.length < 6) return setErr('Password must be at least 6 characters.')
+    { const weak = passwordProblem(pw, email); if (weak) return setErr(weak) }
     setErr(null)
     setBusy(true)
     const r = await signUp(email.trim(), pw, name.trim())
@@ -77,7 +78,7 @@ export default function Signup() {
             className="input"
             type="password"
             autoComplete="new-password"
-            placeholder="At least 6 characters"
+            placeholder="At least 8 characters"
             value={pw}
             onChange={(e) => setPw(e.target.value)}
           />

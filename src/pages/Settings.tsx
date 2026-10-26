@@ -7,6 +7,7 @@ import { downloadText, detectMap, rowsToDrafts, splitCsv, toCsv, type CsvDraft, 
 import { todayISO } from '../lib/dates'
 import type { Txn } from '../lib/types'
 import { Download, Upload, X } from '../components/Icons'
+import { passwordProblem } from '../lib/security'
 import { Glyph, type GlyphName, glyphFor } from '../components/bits/Glyph'
 
 type Tab = 'profile' | 'privacy' | 'data' | 'about'
@@ -84,7 +85,7 @@ function ProfileTab() {
   }
 
   async function changePw() {
-    if (pw.length < 6) return setPwErr('Password must be at least 6 characters.')
+    { const weak = passwordProblem(pw); if (weak) return setPwErr(weak) }
     if (pw !== pw2) return setPwErr("Passwords don't match.")
     setBusyPw(true)
     const err = await updatePassword(pw)

@@ -2,6 +2,7 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useR
 import type { Budget, Essential, Goal, LedgerData, Profile, Recurring, Settings, Txn } from './types'
 import type { DbEvent } from './types'
 import { applyEvent, delay, demoAuth, demoDb, demoSeedData, freshData } from './db/demo'
+import { EMAIL_RE, clearFailures, lockoutMessage, passwordProblem, recordFailure } from './security'
 
 import { auth as sbAuth, db as sbDb, supabaseEnabled } from './db/supabase'
 import { toMinor } from './money'
@@ -180,25 +181,36 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   /* ----- auth actions ----- */
   const signIn = useCallback(async (email: string, password: string): Promise<string | null> => {
+    const locked = lockoutMessage(email)
+    if (locked) return locked
     if (supabaseEnabled) {
       const r = await sbAuth.signIn(email, password)
-      if (r.error) return r.error
+      if (r.error) {
+        recordFailure(email)
+        return r.error
+      }
+      clearFailures(email)
       const su = await sbAuth.getUser()
       if (su) await hydrate({ id: su.id, email: su.email, name: su.name, mode: 'supabase' })
       return null
     }
     try {
       await delay(450)
-      const u = demoAuth.signIn(email, password)
+      const u = await demoAuth.signIn(email, password)
+      clearFailures(email)
       await hydrate({ id: u.id, email: u.email, name: u.name, mode: 'demo' })
       return null
     } catch (e) {
-      return e instanceof Error ? e.message : 'Could not sign in.'
+      recordFailure(email)
+      return lockoutMessage(email) ?? (e instanceof Error ? e.message : 'Could not sign in.')
     }
   }, [hydrate])
 
   const signUp = useCallback(
     async (email: string, password: string, name: string): Promise<{ error: string | null; needsConfirm: boolean }> => {
+      if (!EMAIL_RE.test(email.trim())) return { error: 'Enter a valid email.', needsConfirm: false }
+      const weak = passwordProblem(password, email)
+      if (weak) return { error: weak, needsConfirm: false }
       if (supabaseEnabled) {
         const r = await sbAuth.signUp(email, password, name)
         if (r.error) return { error: r.error, needsConfirm: false }
@@ -209,7 +221,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       }
       await delay(500)
       try {
-        const u = demoAuth.signUp(email, password, name)
+        const u = await demoAuth.signUp(email, password, name)
         await hydrate({ id: u.id, email: u.email, name: u.name, mode: 'demo' })
         return { error: null, needsConfirm: false }
       } catch (e) {
@@ -228,7 +240,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       await delay(400)
       // One-tap demo user: seeds sample data and skips onboarding
       const existing = demoAuth.listUsers().find((u) => u.email === 'student@demo.ledger')
-      const u = existing ?? demoAuth.signUp('student@demo.ledger', 'ledger123', 'Aarav')
+      const u = existing ?? await demoAuth.signUp('student@demo.ledger', 'ledger123', 'Aarav')
       u.onboarded = true
       demoAuth.setOnboarded(u.id)
       // Persist the session so a hard reload keeps the demo signed in
@@ -247,24 +259,22 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       return r.error ?? null
     }
     await delay(500)
-    const exists = demoAuth.listUsers().some((u) => u.email.toLowerCase() === email.toLowerCase())
-    if (!exists) return 'No account found with this email.'
+    // Same answer whether or not the email exists (no account probing).
     return null
   }, [])
 
   const updatePassword = useCallback(async (pw: string): Promise<string | null> => {
+    const weak = passwordProblem(pw, user?.email)
+    if (weak) return weak
     if (supabaseEnabled) {
       const r = await sbAuth.updatePassword(pw)
       return r.error ?? null
     }
     await delay(400)
     const u = demoAuth.currentUser()
-    if (u) {
-      const users = demoAuth.listUsers().map((x) => (x.id === u.id ? { ...x, password: pw } : x))
-      localStorage.setItem('ledger.demo.users', JSON.stringify(users))
-    }
+    if (u) await demoAuth.setPassword(u.id, pw)
     return null
-  }, [])
+  }, [user?.email])
 
   const signOut = useCallback(async () => {
     if (user?.mode === 'supabase') await sbAuth.signOut()

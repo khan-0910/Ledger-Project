@@ -1,6 +1,7 @@
 import type { LedgerData, Profile } from '../types'
 import type { DbEvent } from '../types'
 import { demoData } from '../demoData'
+import { BAD_LOGIN, hashPassword, isHashed, verifyPassword } from '../security'
 
 const LS_USERS = 'ledger.demo.users'
 const LS_SESSION = 'ledger.demo.session'
@@ -10,7 +11,7 @@ export interface DemoUser {
   id: string
   email: string
   name: string
-  password: string
+  password: string // pbkdf2 hash (old accounts may hold plain text until next login)
   onboarded: boolean
 }
 
@@ -75,21 +76,30 @@ export const demoAuth = {
     if (!id) return null
     return readUsers().find((u) => u.id === id) ?? null
   },
-  signIn(email: string, password: string): DemoUser {
-    const u = readUsers().find((x) => x.email.toLowerCase() === email.toLowerCase())
-    if (!u) throw new Error('No account found with this email. Try creating one.')
-    if (u.password !== password) throw new Error('Wrong password. Mind the caps lock.')
+  async signIn(email: string, password: string): Promise<DemoUser> {
+    const u = readUsers().find((x) => x.email.toLowerCase() === email.trim().toLowerCase())
+    // Hash even for unknown emails so both paths take the same time.
+    const ok = u
+      ? isHashed(u.password) ? await verifyPassword(password, u.password) : u.password === password
+      : (await hashPassword(password), false)
+    if (!u || !ok) throw new Error(BAD_LOGIN)
+    // Upgrade any old plain-text password to a hash on first good login.
+    if (!isHashed(u.password)) await demoAuth.setPassword(u.id, password)
     localStorage.setItem(LS_SESSION, u.id)
     return u
   },
-  signUp(email: string, password: string, name: string): DemoUser {
-    if (readUsers().some((x) => x.email.toLowerCase() === email.toLowerCase())) {
-      throw new Error('An account with this email already exists. Try logging in.')
+  async signUp(email: string, password: string, name: string): Promise<DemoUser> {
+    if (readUsers().some((x) => x.email.toLowerCase() === email.trim().toLowerCase())) {
+      throw new Error('Could not create that account. Try logging in instead.')
     }
-    const u: DemoUser = { id: crypto.randomUUID(), email, name, password, onboarded: false }
+    const u: DemoUser = { id: crypto.randomUUID(), email: email.trim(), name, password: await hashPassword(password), onboarded: false }
     writeUsers([...readUsers(), u])
     localStorage.setItem(LS_SESSION, u.id)
     return u
+  },
+  async setPassword(id: string, password: string): Promise<void> {
+    const hash = await hashPassword(password)
+    writeUsers(readUsers().map((u) => (u.id === id ? { ...u, password: hash } : u)))
   },
   setOnboarded(id: string): void {
     writeUsers(readUsers().map((u) => (u.id === id ? { ...u, onboarded: true } : u)))

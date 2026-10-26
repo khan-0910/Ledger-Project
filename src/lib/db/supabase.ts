@@ -126,7 +126,7 @@ export const auth = {
   async sendResetEmail(email: string): Promise<{ ok: boolean; error?: string }> {
     if (!supabase) return { ok: false, error: NO_SUPABASE }
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: window.location.origin + '/reset',
+      redirectTo: new globalThis.URL(import.meta.env.BASE_URL + 'reset', window.location.origin).href,
     })
     if (error) return { ok: false, error: humanAuthError(error.message) }
     return { ok: true }
@@ -159,8 +159,9 @@ function humanAuthError(msg: string): string {
   if (m.includes('invalid login credentials')) return 'Wrong email or password.'
   if (m.includes('email not confirmed')) return 'Please confirm your email first — check your inbox.'
   if (m.includes('rate limit')) return 'Too many attempts — wait a minute and try again.'
-  if (m.includes('already registered')) return 'An account with this email already exists. Try logging in.'
-  if (m.includes('password should be') || m.includes('password')) return 'Password must be at least 6 characters.'
+  if (m.includes('already registered')) return 'Could not create that account. Try logging in instead.'
+  if (m.includes('pwned') || m.includes('leaked') || m.includes('weak')) return 'That password has shown up in a data leak. Pick another.'
+  if (m.includes('password should be') || m.includes('password')) return 'Password must be at least 8 characters.'
   if (m.includes('failed to fetch')) return "Can't reach the server. Check your connection."
   return 'Something went wrong. Please try again.'
 }
