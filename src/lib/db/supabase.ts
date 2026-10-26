@@ -107,7 +107,12 @@ export const auth = {
     name: string,
   ): Promise<{ ok: boolean; needsConfirm: boolean; error?: string }> {
     if (!supabase) return { ok: false, needsConfirm: false, error: NO_SUPABASE }
-    const { data, error } = await supabase.auth.signUp({ email, password, options: { data: { name } } })
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      // Confirm link must land back on the Pages path, not the bare domain.
+      options: { data: { name }, emailRedirectTo: new globalThis.URL(import.meta.env.BASE_URL, window.location.origin).href },
+    })
     if (error) return { ok: false, needsConfirm: false, error: humanAuthError(error.message) }
     return { ok: true, needsConfirm: !data.session }
   },
