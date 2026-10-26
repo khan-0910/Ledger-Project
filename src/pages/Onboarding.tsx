@@ -133,20 +133,6 @@ export default function Onboarding() {
         </AnimatePresence>
       </div>
 
-      <div className="onb-foot">
-        {step > 0 && <button className="btn btn-ghost" onClick={back}>Back</button>}
-        <div className="onb-foot-spacer" />
-        {step < STEPS - 1 ? (
-          <button className="btn btn-primary" onClick={next} disabled={!canNext}>
-            Continue <ArrowRight size={17} />
-          </button>
-        ) : (
-          <button className="btn btn-accent" onClick={() => void finish()} disabled={!canNext || finishing}>
-            {finishing ? 'Setting up…' : "You're ready — open my Ledger"}
-          </button>
-        )}
-      </div>
-
       {/* Breakdown preview slides up once everything is filled */}
       <AnimatePresence>
         {step === 3 && gfMinor > 0 && !over && (
@@ -175,6 +161,21 @@ export default function Onboarding() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      <div className="onb-foot">
+        {step > 0 && <button className="btn btn-ghost" onClick={back}>Back</button>}
+        <div className="onb-foot-spacer" />
+        {step < STEPS - 1 ? (
+          <button className="btn btn-primary" onClick={next} disabled={!canNext}>
+            Continue <ArrowRight size={17} />
+          </button>
+        ) : (
+          <button className="btn btn-accent" onClick={() => void finish()} disabled={!canNext || finishing}>
+            {finishing ? 'Setting up…' : "You're ready — open my Ledger"}
+          </button>
+        )}
+      </div>
+
     </div>
   )
 }

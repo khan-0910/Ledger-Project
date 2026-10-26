@@ -561,3 +561,14 @@
   }
   .shell { transition: none; }
 }
+
+/* Onboarding breakdown: sits in the page flow above the buttons, never over them */
+.onb-page { grid-template-rows: auto 1fr auto auto; }
+.onb-breakdown {
+  position: static; transform: none; rotate: 0deg;
+  width: 100%; max-width: 640px; margin: 18px auto 0;
+}
+.onb-breakdown .alloc-card,
+.onb-breakdown .alloc-card * { color: #17140f; }
+.onb-breakdown .alloc-card .faint,
+.onb-breakdown .alloc-card [class*='note'] { color: #4a4438; }
