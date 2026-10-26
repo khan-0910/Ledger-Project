@@ -250,10 +250,10 @@ export function goalProgress(g: Goal): number {
 export function effectiveTotal(profile: Profile, txns: Txn[]): number {
   const m = moneyModel(profile, txns)
   const monthTxns = txnsInMonth(txns, m.monthKey)
-  return (
-    profile.strictSavingsMinor +
-    m.guiltFreeAllowance -
-    totalOf(monthTxns, 'expense') +
-    totalOf(monthTxns, 'income')
-  )
+  // Start from the balance the user entered (it includes unallocated money).
+  // Old profiles with no balance saved fall back to the two pots.
+  const base = profile.totalBalanceMinor > 0
+    ? profile.totalBalanceMinor
+    : profile.strictSavingsMinor + m.guiltFreeAllowance
+  return base - totalOf(monthTxns, 'expense') + totalOf(monthTxns, 'income')
 }
