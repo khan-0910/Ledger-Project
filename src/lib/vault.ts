@@ -34,7 +34,12 @@ export const importDataKey = (b64: string) =>
 /** Ask the server for this user's data key (needs a signed-in session). */
 export async function fetchDataKey(): Promise<CryptoKey> {
   const { data, error } = await sb().functions.invoke<{ key: string }>('ledger-key', { method: 'POST' })
-  if (error || !data?.key) throw new Error('key service unavailable')
+  if (error || !data?.key) {
+    // Surface the server's own reason (status + body) so failures are diagnosable.
+    const ctx = (error as { context?: Response } | null)?.context
+    const detail = ctx ? `${ctx.status} ${await ctx.text().catch(() => '')}` : (error?.message ?? 'no key returned')
+    throw new Error('key service: ' + detail)
+  }
   return importDataKey(data.key)
 }
 

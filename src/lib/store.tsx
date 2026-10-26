@@ -193,9 +193,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const dk = (await cachedKey(u.id)) ?? (await fetchDataKey())
       await openVault(u, dk)
       return null
-    } catch {
+    } catch (e) {
       dkRef.current = null
-      return "Couldn't open your data. Check your connection and try again."
+      const why = e instanceof Error ? e.message : String(e)
+      console.error('[ledger] unlock failed:', e)
+      return `Couldn't open your data (${why.slice(0, 140)}).`
     }
   }, [openVault])
 
