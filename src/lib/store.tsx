@@ -105,7 +105,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       }
       if (!u) {
         const du = demoAuth.currentUser()
-        if (du) u = { id: du.id, email: du.email, name: du.name, mode: 'demo' }
+        // With Supabase on, only the one-tap demo stays local; old browser-only logins are dropped.
+        if (du && supabaseEnabled && du.email !== 'student@demo.ledger') demoAuth.signOut()
+        else if (du) u = { id: du.id, email: du.email, name: du.name, mode: 'demo' }
       }
       if (!alive) return
       if (!u) {
