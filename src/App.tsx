@@ -11,9 +11,7 @@ import Signup from './pages/Signup'
 import Forgot from './pages/Forgot'
 import Reset from './pages/Reset'
 import Onboarding from './pages/Onboarding'
-import Unlock from './pages/Unlock'
 import Privacy from './pages/Privacy'
-import RecoveryCodeModal from './components/RecoveryCode'
 import Dashboard from './pages/Dashboard'
 import Transactions from './pages/Transactions'
 import Budgets from './pages/Budgets'
@@ -109,15 +107,6 @@ function StageRouter() {
     )
   }
 
-  if (stage === 'locked') {
-    return (
-      <Routes>
-        <Route path="/privacy" element={<Privacy />} />
-        <Route path="*" element={<Unlock />} />
-      </Routes>
-    )
-  }
-
   if (stage === 'onboarding') {
     return (
       <Routes>
@@ -155,7 +144,6 @@ function GlobalAddSheet() {
           <ScrollToTop />
           <StageRouter />
           <GlobalAddSheet />
-          <RecoveryCodeModal />
         </AppProvider>
       </ThemeProvider>
     </Router>

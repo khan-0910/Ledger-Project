@@ -19,7 +19,7 @@ export default function Privacy() {
 
         <h2>The short version</h2>
         <ul>
-          <li>Your money data is <b>encrypted on your device</b> before it is saved. We store only scrambled data we can't read.</li>
+          <li>Your money data is <b>encrypted on your device</b> before it is saved. Our database holds only scrambled data.</li>
           <li>We don't sell data, show ads, or use tracking or analytics scripts.</li>
           <li>You can export your data or delete your account at any time from Settings.</li>
         </ul>
@@ -28,24 +28,24 @@ export default function Privacy() {
         <ul>
           <li><b>Your email address and a hashed password</b>, so you can log in. Our sign-in provider stores these; we can see your email, never your password.</li>
           <li><b>Your ledger</b>: balances, savings split, transactions, budgets, goals, recurring payments, the name you give us, and your settings. This is stored as one encrypted block.</li>
-          <li><b>Your encrypted key</b>: the key that unlocks your ledger, itself locked by your password and, separately, by your recovery code. Without one of those, it is useless.</li>
         </ul>
         <p>We don't ask for bank logins, card numbers, account numbers or government IDs, and you shouldn't enter them in notes.</p>
 
         <h2>Who can see your data</h2>
         <p>
-          Only you, on a device where you've entered your password or recovery code. The encryption (AES-256-GCM, key derived
-          with PBKDF2) happens in your browser. The server, the people who run Ledger, and anyone who got into the database would see
-          only ciphertext. What we <i>can</i> see: your email, when your account was made, when you last signed in, and how big your
-          encrypted data is.
+          You, whenever you're logged in. Your ledger is encrypted in your browser (AES-256-GCM) with a key unique to your account.
+          That key is made on demand by a secured server function from a secret that is never stored in the database, and it is only
+          handed to you after you sign in. So the database, its backups, and anyone browsing or leaking its tables see only ciphertext.
+        </p>
+        <p>
+          To be straight with you: because the server can make your key, the person running Ledger could, in principle, deliberately
+          decrypt your data using that secret. We don't, and nothing in our normal tools shows it. This is what lets a normal password
+          reset work without you ever losing your data. What we see in day-to-day running: your email, when your account was made,
+          when you last signed in, and the size of your encrypted data.
         </p>
 
         <h2>If you forget your password</h2>
-        <p>
-          When you set up your account you get a <b>recovery code</b>. Keep it safe. After a password reset, it unlocks your data and
-          re-locks it with your new password. We can't see or resend the code. If you lose both your password and the code, your old
-          data can't be recovered by anyone; you can wipe it and start fresh.
-        </p>
+        <p>Use "Forgot password" to get a reset email. Your data stays safe and opens as usual with your new password.</p>
 
         <h2>Services we use</h2>
         <ul>

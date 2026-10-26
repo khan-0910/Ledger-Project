@@ -1,16 +1,15 @@
 /**
- * End-to-end encryption for Supabase mode.
+ * Encrypted storage for Supabase mode.
  *
- * - Each user has one random AES-256-GCM data key (DK).
- * - DK is stored on the server only in wrapped form, twice:
- *     by a key derived from the password, and by a key derived from a recovery code.
- * - The ledger is saved as one encrypted blob. The server never sees plain data.
- * - This device keeps DK in IndexedDB so a reload does not ask for the password again.
+ * - Each user's AES-256-GCM data key comes from the `ledger-key` Edge Function,
+ *   derived from a server secret + the user id. It is never stored in the database.
+ * - The ledger is saved as one encrypted blob, so table views and dumps show only ciphertext.
+ * - The key doesn't depend on the password, so a normal password reset keeps the data.
+ * - This device caches the key (non-extractable) in IndexedDB; logging out clears it.
  */
 import type { LedgerData } from './types'
 import { supabase } from './db/supabase'
 
-const ITERATIONS = 310_000
 const enc = new TextEncoder()
 const dec = new TextDecoder()
 
@@ -23,121 +22,20 @@ const toB64 = (b: ArrayBuffer | Uint8Array) => {
 const fromB64 = (s: string): Uint8Array<ArrayBuffer> => Uint8Array.from(atob(s), (c) => c.charCodeAt(0))
 const rand = (n: number): Uint8Array<ArrayBuffer> => crypto.getRandomValues(new Uint8Array(n))
 
-async function kek(secret: string, salt: Uint8Array<ArrayBuffer>, iterations: number): Promise<CryptoKey> {
-  const base = await crypto.subtle.importKey('raw', enc.encode(secret), 'PBKDF2', false, ['deriveKey'])
-  return crypto.subtle.deriveKey(
-    { name: 'PBKDF2', hash: 'SHA-256', salt, iterations },
-    base,
-    { name: 'AES-GCM', length: 256 },
-    false,
-    ['wrapKey', 'unwrapKey'],
-  )
-}
-
-async function wrap(dk: CryptoKey, secret: string) {
-  const salt = rand(16)
-  const iv = rand(12)
-  const wrapped = await crypto.subtle.wrapKey('raw', dk, await kek(secret, salt, ITERATIONS), { name: 'AES-GCM', iv })
-  return { salt: toB64(salt), iv: toB64(iv), wrapped: toB64(wrapped) }
-}
-
-async function unwrap(secret: string, salt: string, iv: string, wrapped: string, iterations: number): Promise<CryptoKey | null> {
-  try {
-    return await crypto.subtle.unwrapKey(
-      'raw',
-      fromB64(wrapped),
-      await kek(secret, fromB64(salt), iterations),
-      { name: 'AES-GCM', iv: fromB64(iv) },
-      { name: 'AES-GCM', length: 256 },
-      true,
-      ['encrypt', 'decrypt'],
-    )
-  } catch {
-    return null // wrong secret
-  }
-}
-
-/* ---------- Recovery code: 25 random chars, grouped XXXXX-XXXXX-... (~125 bits) ---------- */
-
-const ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789' // no 0/O/1/I/L to avoid misreads
-
-export function newRecoveryCode(): string {
-  const out: string[] = []
-  for (const b of rand(25)) out.push(ALPHABET[b % ALPHABET.length])
-  return out.join('').match(/.{5}/g)!.join('-')
-}
-
-/** Accepts the code with or without dashes, any case. */
-export const normalizeCode = (c: string) => c.toUpperCase().replace(/[^A-Z0-9]/g, '').match(/.{1,5}/g)?.join('-') ?? ''
-
-/* ---------- Server rows ---------- */
-
-type KeyRow = {
-  user_id: string
-  pw_salt: string; pw_iv: string; pw_wrapped: string
-  rc_salt: string; rc_iv: string; rc_wrapped: string
-  iterations: number
-}
-
 function sb() {
   if (!supabase) throw new Error('Supabase is not configured.')
   return supabase
 }
 
-export async function fetchKeyRow(userId: string): Promise<KeyRow | null> {
-  const { data, error } = await sb().from('user_keys').select('*').eq('user_id', userId).maybeSingle()
-  if (error) throw new Error(error.message)
-  return (data as KeyRow) ?? null
-}
+/** Import raw key bytes as a non-extractable AES-GCM key. */
+export const importDataKey = (b64: string) =>
+  crypto.subtle.importKey('raw', fromB64(b64), { name: 'AES-GCM' }, false, ['encrypt', 'decrypt'])
 
-/** Pure part of key setup: a new data key wrapped by password and by a fresh recovery code. */
-export async function makeKeyRow(userId: string, password: string): Promise<{ dk: CryptoKey; recoveryCode: string; row: KeyRow }> {
-  const dk = await crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, true, ['encrypt', 'decrypt'])
-  const recoveryCode = newRecoveryCode()
-  const [p, r] = await Promise.all([wrap(dk, password), wrap(dk, recoveryCode)])
-  const row: KeyRow = {
-    user_id: userId,
-    pw_salt: p.salt, pw_iv: p.iv, pw_wrapped: p.wrapped,
-    rc_salt: r.salt, rc_iv: r.iv, rc_wrapped: r.wrapped,
-    iterations: ITERATIONS,
-  }
-  return { dk, recoveryCode, row }
-}
-
-/** First time: make a data key, wrap it with password + a fresh recovery code, store it. */
-export async function createKeys(userId: string, password: string): Promise<{ dk: CryptoKey; recoveryCode: string }> {
-  const { dk, recoveryCode, row } = await makeKeyRow(userId, password)
-  const { error } = await sb().from('user_keys').upsert({ ...row, updated_at: new Date().toISOString() })
-  if (error) throw new Error(error.message)
-  return { dk, recoveryCode }
-}
-
-export const unlockWithPassword = (row: KeyRow, password: string) =>
-  unwrap(password, row.pw_salt, row.pw_iv, row.pw_wrapped, row.iterations)
-
-export const unlockWithRecovery = (row: KeyRow, code: string) =>
-  unwrap(normalizeCode(code), row.rc_salt, row.rc_iv, row.rc_wrapped, row.iterations)
-
-/** Re-lock the data key with a new password (after a change or a reset). */
-export async function rewrapPassword(userId: string, dk: CryptoKey, password: string): Promise<void> {
-  const p = await wrap(dk, password)
-  const { error } = await sb()
-    .from('user_keys')
-    .update({ pw_salt: p.salt, pw_iv: p.iv, pw_wrapped: p.wrapped, iterations: ITERATIONS, updated_at: new Date().toISOString() })
-    .eq('user_id', userId)
-  if (error) throw new Error(error.message)
-}
-
-/** Replace the recovery code (old one stops working). */
-export async function rotateRecoveryCode(userId: string, dk: CryptoKey): Promise<string> {
-  const code = newRecoveryCode()
-  const r = await wrap(dk, code)
-  const { error } = await sb()
-    .from('user_keys')
-    .update({ rc_salt: r.salt, rc_iv: r.iv, rc_wrapped: r.wrapped, updated_at: new Date().toISOString() })
-    .eq('user_id', userId)
-  if (error) throw new Error(error.message)
-  return code
+/** Ask the server for this user's data key (needs a signed-in session). */
+export async function fetchDataKey(): Promise<CryptoKey> {
+  const { data, error } = await sb().functions.invoke<{ key: string }>('ledger-key', { method: 'POST' })
+  if (error || !data?.key) throw new Error('key service unavailable')
+  return importDataKey(data.key)
 }
 
 /* ---------- Encrypted ledger blob ---------- */
@@ -181,11 +79,6 @@ export async function saveVault(userId: string, dk: CryptoKey, d: LedgerData, ve
   return version + 1
 }
 
-/** Wipe the vault and keys (used by "start over" when both secrets are lost). */
-export async function destroyVault(userId: string): Promise<void> {
-  await sb().from('vaults').delete().eq('user_id', userId)
-  await sb().from('user_keys').delete().eq('user_id', userId)
-}
 
 /* ---------- This-device key cache (IndexedDB) ---------- */
 

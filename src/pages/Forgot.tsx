@@ -29,7 +29,7 @@ export default function Forgot() {
       <AuthLayout title="Reset link sent" sub={`If an account exists for ${email}, a reset link is on its way.`}>
         <div className="confirm-note">
           <span className="confirm-emoji" aria-hidden>📨</span>
-          <p className="muted">The link expires soon — use it while it's fresh. Your data is encrypted, so after the reset you'll need your recovery code once to unlock it.</p>
+          <p className="muted">The link expires soon — use it while it's fresh. Then set a new password and get back to your Ledger.</p>
           <Link className="btn btn-primary" to="/login">Back to login</Link>
         </div>
       </AuthLayout>

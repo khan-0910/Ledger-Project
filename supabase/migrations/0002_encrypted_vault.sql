@@ -1,9 +1,9 @@
 -- ============================================================
--- Ledger — end-to-end encrypted storage + account deletion
+-- Ledger — encrypted storage + account deletion
 -- Run once in the Supabase SQL editor, after 0001_init.sql.
 --
--- The app encrypts all money data in the browser before saving.
--- The server (and the project owner) only ever see ciphertext.
+-- The app encrypts all money data in the browser before saving, with a
+-- per-user key from the ledger-key Edge Function. Tables hold only ciphertext.
 -- ============================================================
 
 -- One encrypted blob per user: the whole ledger (profile, txns, budgets, goals...)
@@ -15,32 +15,13 @@ create table if not exists public.vaults (
   updated_at timestamptz not null default now()
 );
 
--- The user's data key, wrapped twice: by their password and by their recovery code.
--- Neither secret is ever sent here, so these rows are useless without them.
-create table if not exists public.user_keys (
-  user_id uuid primary key references auth.users(id) on delete cascade,
-  pw_salt text not null,
-  pw_iv text not null,
-  pw_wrapped text not null,
-  rc_salt text not null,
-  rc_iv text not null,
-  rc_wrapped text not null,
-  iterations integer not null,
-  updated_at timestamptz not null default now()
-);
-
 alter table public.vaults enable row level security;
-alter table public.user_keys enable row level security;
 
 drop policy if exists "vaults: own row" on public.vaults;
 create policy "vaults: own row"
   on public.vaults for all
   using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
-drop policy if exists "user_keys: own row" on public.user_keys;
-create policy "user_keys: own row"
-  on public.user_keys for all
-  using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
 -- Stop copying the signup name into plain-text profiles; the name lives in the vault now.
 create or replace function public.handle_new_user()

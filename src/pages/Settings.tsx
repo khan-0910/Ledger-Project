@@ -160,20 +160,13 @@ function ProfileTab() {
   )
 }
 
-/* ================= RECOVERY CODE + DELETE ACCOUNT ================= */
+/* ================= DELETE ACCOUNT ================= */
 
 function AccountSafety() {
-  const { user, makeRecoveryCode, deleteAccount, toast } = useApp()
+  const { user, deleteAccount, toast } = useApp()
   const [confirm, setConfirm] = useState('')
   const [busy, setBusy] = useState(false)
   const cloud = user?.mode === 'supabase'
-
-  async function newCode() {
-    setBusy(true)
-    const err = await makeRecoveryCode()
-    setBusy(false)
-    if (err) toast('error', err)
-  }
 
   async function remove() {
     if (confirm.trim().toUpperCase() !== 'DELETE') return toast('error', 'Type DELETE to confirm.')
@@ -185,16 +178,6 @@ function AccountSafety() {
 
   return (
     <>
-      {cloud && (
-        <section className="card set-card">
-          <h2 className="card-title">Recovery code</h2>
-          <p className="faint set-hint">
-            Your data is end-to-end encrypted. If you forget your password, your recovery code is the only way back in.
-            Lost it? Make a new one. The old code stops working.
-          </p>
-          <button className="btn btn-soft" onClick={() => void newCode()} disabled={busy}>Make a new recovery code</button>
-        </section>
-      )}
       <section className="card set-card">
         <h2 className="card-title">Delete account</h2>
         <p className="faint set-hint">

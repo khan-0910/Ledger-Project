@@ -5,20 +5,14 @@ import { applyEvent, delay, demoAuth, demoDb, demoSeedData, freshData } from './
 import { EMAIL_RE, clearFailures, lockoutMessage, passwordProblem, recordFailure } from './security'
 
 import { auth as sbAuth, db as sbDb, supabase, supabaseEnabled } from './db/supabase'
-import {
-  VaultConflict, cacheKey, cachedKey, createKeys, destroyVault, fetchKeyRow, forgetKeys, loadVault,
-  rewrapPassword, rotateRecoveryCode, saveVault, unlockWithPassword, unlockWithRecovery,
-} from './vault'
+import { VaultConflict, cacheKey, cachedKey, fetchDataKey, forgetKeys, loadVault, saveVault } from './vault'
 import { toMinor } from './money'
 import { todayISO } from './dates'
 import { hideAll, initPrivacy } from './privacy'
 
 export type SessionUser = { id: string; email: string; name: string; mode: 'demo' | 'supabase' }
 
-export type SessionStage = 'loading' | 'signed-out' | 'locked' | 'onboarding' | 'ready'
-
-/** Why the data is locked: just needs the password, or the key predates a password reset. */
-export type LockMode = 'password' | 'recovery'
+export type SessionStage = 'loading' | 'signed-out' | 'onboarding' | 'ready'
 
 export interface Toast {
   id: number
@@ -42,13 +36,6 @@ interface AppContextValue {
   sendReset: (email: string) => Promise<string | null>
   updatePassword: (pw: string) => Promise<string | null>
   signOut: () => Promise<void>
-  lockMode: LockMode
-  recoveryCode: string | null
-  unlockSession: (password: string) => Promise<string | null>
-  recoverWithCode: (code: string, newPassword: string) => Promise<string | null>
-  startFresh: (newPassword: string) => Promise<string | null>
-  makeRecoveryCode: () => Promise<string | null>
-  ackRecoveryCode: () => void
   deleteAccount: () => Promise<string | null>
   completeOnboarding: (p: { name: string; total: number; strict: number; guiltFree: number }) => Promise<void>
   dispatch: (event: DbEvent) => Promise<void>
@@ -118,20 +105,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         const su = await sbAuth.getUser()
         if (su) {
           const su2: SessionUser = { id: su.id, email: su.email, name: su.name, mode: 'supabase' }
-          // This device already holds the data key: open straight away.
-          const dk = await cachedKey(su2.id)
-          if (dk) {
-            try {
-              await openVault(su2, dk)
-              return
-            } catch {
-              /* stale key: fall through to the unlock screen */
-            }
-          }
+          if (!(await unlock(su2))) return
           if (!alive) return
-          setUser(su2)
-          setLockMode('password')
-          setStage('locked')
+          setStage('signed-out')
           return
         }
       }
@@ -182,8 +158,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const dkRef = useRef<CryptoKey | null>(null)
   const versionRef = useRef(0)
   const saveChain = useRef<Promise<unknown>>(Promise.resolve())
-  const [lockMode, setLockMode] = useState<LockMode>('password')
-  const [recoveryCode, setRecoveryCode] = useState<string | null>(null)
 
   const openVault = useCallback(async (u: SessionUser, dk: CryptoKey) => {
     dkRef.current = dk
@@ -213,27 +187,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  /** Password is known (login/signup): open the vault, or set up keys the first time. */
-  const unlock = useCallback(async (u: SessionUser, password: string): Promise<string | null> => {
+  /** Signed in: get this user's data key (device cache, else the key service) and open the vault. */
+  const unlock = useCallback(async (u: SessionUser): Promise<string | null> => {
     try {
-      const row = await fetchKeyRow(u.id)
-      if (!row) {
-        const k = await createKeys(u.id, password)
-        setRecoveryCode(k.recoveryCode)
-        await openVault(u, k.dk)
-        return null
-      }
-      const dk = await unlockWithPassword(row, password)
-      if (dk) {
-        await openVault(u, dk)
-        return null
-      }
-      // Login worked, but the data key is still locked with the old password (reset elsewhere).
-      setUser(u)
-      setLockMode('recovery')
-      setStage('locked')
+      const dk = (await cachedKey(u.id)) ?? (await fetchDataKey())
+      await openVault(u, dk)
       return null
     } catch {
+      dkRef.current = null
       return "Couldn't open your data. Check your connection and try again."
     }
   }, [openVault])
@@ -288,7 +249,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       }
       clearFailures(email)
       const su = await sbAuth.getUser()
-      return su ? unlock({ id: su.id, email: su.email, name: su.name, mode: 'supabase' }, password) : null
+      return su ? unlock({ id: su.id, email: su.email, name: su.name, mode: 'supabase' }) : null
     }
     try {
       await delay(450)
@@ -312,7 +273,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         if (r.error) return { error: r.error, needsConfirm: false }
         if (r.needsConfirm) return { error: null, needsConfirm: true }
         const su = await sbAuth.getUser()
-        const err = su ? await unlock({ id: su.id, email: su.email, name: name || su.name, mode: 'supabase' }, password) : null
+        const err = su ? await unlock({ id: su.id, email: su.email, name: name || su.name, mode: 'supabase' }) : null
         return { error: err, needsConfirm: false }
       }
       await delay(500)
@@ -364,11 +325,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (weak) return weak
     if (supabaseEnabled) {
       const r = await sbAuth.updatePassword(pw)
-      if (r.error) return r.error
-      // Re-lock the data key with the new password so the next login opens it.
-      const dk = dkRef.current ?? (user ? await cachedKey(user.id) : null)
-      if (dk && user) await rewrapPassword(user.id, dk, pw)
-      return null
+      return r.error ?? null
     }
     await delay(400)
     const u = demoAuth.currentUser()
@@ -388,77 +345,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     hideAll()
     setStage('signed-out')
   }, [user])
-
-  /* ----- unlock / recovery (Supabase mode) ----- */
-  const unlockSession = useCallback(async (password: string): Promise<string | null> => {
-    if (!user) return 'Session expired. Log in again.'
-    const locked = lockoutMessage(user.email)
-    if (locked) return locked
-    const r = await sbAuth.signIn(user.email, password)
-    if (r.error) {
-      recordFailure(user.email)
-      return lockoutMessage(user.email) ?? r.error
-    }
-    clearFailures(user.email)
-    return unlock(user, password)
-  }, [user, unlock])
-
-  /** Sets the account password, skipping the call if it already is that password. */
-  const ensurePassword = useCallback(async (email: string, pw: string): Promise<string | null> => {
-    const already = await sbAuth.signIn(email, pw)
-    if (already.ok) return null
-    const r = await sbAuth.updatePassword(pw)
-    return r.error ?? null
-  }, [])
-
-  const recoverWithCode = useCallback(async (code: string, newPassword: string): Promise<string | null> => {
-    if (!user) return 'Session expired. Log in again.'
-    const weak = passwordProblem(newPassword, user.email)
-    if (weak) return weak
-    try {
-      const row = await fetchKeyRow(user.id)
-      if (!row) return 'No saved key found for this account. Use "Start fresh" below.'
-      const dk = await unlockWithRecovery(row, code)
-      if (!dk) return "That recovery code doesn't match. Check it and try again."
-      const err = await ensurePassword(user.email, newPassword)
-      if (err) return err
-      await rewrapPassword(user.id, dk, newPassword)
-      await openVault(user, dk)
-      return null
-    } catch {
-      return "Couldn't unlock. Check your connection and try again."
-    }
-  }, [user, ensurePassword, openVault])
-
-  /** Both password and recovery code lost: wipe the unreadable data and begin again. */
-  const startFresh = useCallback(async (newPassword: string): Promise<string | null> => {
-    if (!user) return 'Session expired. Log in again.'
-    const weak = passwordProblem(newPassword, user.email)
-    if (weak) return weak
-    try {
-      const err = await ensurePassword(user.email, newPassword)
-      if (err) return err
-      await destroyVault(user.id)
-      const k = await createKeys(user.id, newPassword)
-      setRecoveryCode(k.recoveryCode)
-      await openVault(user, k.dk)
-      return null
-    } catch {
-      return "Couldn't reset. Check your connection and try again."
-    }
-  }, [user, ensurePassword, openVault])
-
-  const makeRecoveryCode = useCallback(async (): Promise<string | null> => {
-    if (!user || user.mode !== 'supabase' || !dkRef.current) return 'Recovery codes are only for cloud accounts.'
-    try {
-      setRecoveryCode(await rotateRecoveryCode(user.id, dkRef.current))
-      return null
-    } catch {
-      return "Couldn't make a new code. Try again."
-    }
-  }, [user])
-
-  const ackRecoveryCode = useCallback(() => setRecoveryCode(null), [])
 
   const deleteAccount = useCallback(async (): Promise<string | null> => {
     if (!user) return null
@@ -627,14 +513,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       stage, user, data, reducedMotion, toasts,
       toast, dismissToast,
       signIn, signUp, demoSignIn, sendReset, updatePassword, signOut,
-      lockMode, recoveryCode, unlockSession, recoverWithCode, startFresh, makeRecoveryCode, ackRecoveryCode, deleteAccount,
+      deleteAccount,
       completeOnboarding, dispatch, updateProfile, updateSettings,
       upsertTxn, deleteTxn, setBudgets, setGoals, setRecurring, setEssentials,
       wipeData, reseedDemo,
     }),
     [stage, user, data, reducedMotion, toasts, toast, dismissToast,
       signIn, signUp, demoSignIn, sendReset, updatePassword, signOut, completeOnboarding, dispatch,
-      lockMode, recoveryCode, unlockSession, recoverWithCode, startFresh, makeRecoveryCode, ackRecoveryCode, deleteAccount,
+      deleteAccount,
       updateProfile, updateSettings, upsertTxn, deleteTxn, setBudgets, setGoals, setRecurring, setEssentials, wipeData, reseedDemo],
   )
 
