@@ -580,3 +580,21 @@
 .privacy-doc a { color: inherit; font-weight: 700; }
 .auth-page .card.privacy-doc { background: #fffaf0 !important; color: #17140f; }
 .auth-page .card.privacy-doc .faint, .auth-page .card.privacy-doc p, .auth-page .card.privacy-doc li { color: #2b261d; }
+
+/* Icon pickers: own full-width row, wrap instead of spilling over the name field */
+.addform-row:has(.emoji-row) { grid-template-columns: 1fr; }
+.emoji-row { grid-template-columns: repeat(auto-fill, 46px); justify-content: start; }
+.emoji-cell {
+  width: 46px; height: 46px; display: grid; place-items: center;
+  border-radius: 14px; border: 2px solid var(--sticker-border, #17140f);
+  background: var(--surface-2); color: var(--text); cursor: pointer;
+  transition: translate .15s, background .15s;
+}
+.emoji-cell:hover { translate: 0 -2px; }
+.emoji-cell.active { background: #ffd93d; color: #17140f; box-shadow: 3px 3px 0 #17140f; }
+
+/* Two-up form rows: columns may shrink, so big amount inputs never push past the dialog */
+.addform-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.addform-col, .addform-amount { min-width: 0; }
+.addform-input { min-width: 0; width: 100%; }
+.addform-row:has(.emoji-row) .addform-col.narrow { max-width: none; }
