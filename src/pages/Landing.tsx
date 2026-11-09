@@ -343,7 +343,7 @@ function Hero({ onDemo }: { onDemo: () => void }) {
       className="lx-hero"
       id="top"
       ref={ref}
-      data-nav="light"
+      data-nav="dark" data-flip=""
       onPointerMove={(e) => {
         if (reduced || e.pointerType !== 'mouse') return
         px.set(e.clientX / window.innerWidth - 0.5)
@@ -768,7 +768,7 @@ function Bento() {
   const m = narrow ? 0.35 : 1
 
   return (
-    <section className="lx-bento" id="features" ref={ref} data-nav="light">
+    <section className="lx-bento" id="features" ref={ref} data-nav="dark" data-flip="">
       <div className="lx-wrap">
         <Reveal className="lx-head">
           <span className="lx-kicker k-ink">All in one place</span>
@@ -931,7 +931,7 @@ function SearchDemo() {
 
 function SearchSection() {
   return (
-    <section className="lx-search" id="search" data-nav="light">
+    <section className="lx-search" id="search" data-nav="dark" data-flip="">
       <div className="lx-wrap search-grid">
         <Reveal className="lx-head lx-head-left">
           <span className="lx-kicker k-ink">Search &amp; filter</span>
@@ -1099,7 +1099,7 @@ function Moments() {
   const inView = useInView(ringRef, { once: true, amount: 0.5 })
 
   return (
-    <section className="lx-moments" id="story" data-nav="light">
+    <section className="lx-moments" id="story" data-nav="dark" data-flip="">
       <div className="lx-wrap">
         <Reveal className="lx-head">
           <span className="lx-kicker k-ink">Ledger in the wild</span>
@@ -1277,7 +1277,7 @@ function Closing({ onDemo }: { onDemo: () => void }) {
 
 function Footer({ onDemo }: { onDemo: () => void }) {
   return (
-    <footer className="lx-footer" data-nav="light">
+    <footer className="lx-footer" data-nav="dark" data-flip="">
       <div className="lx-wrap foot-top">
         <div className="foot-brand">
           <LedgerLogo size={28} />

@@ -125,13 +125,13 @@
   transition: background-color 0.7s var(--pop-expo);
   overflow: hidden;
 }
-.shell-dash { --canvas: #f5ecdc; }
-.shell-txns { --canvas: #0f1d3a; }
-.shell-budgets { --canvas: #fbf5ea; }
+.shell-dash { --canvas: #0f1d3a; }
+.shell-txns { --canvas: #0d1a35; }
+.shell-budgets { --canvas: #112145; }
 .shell-goals { --canvas: #142850; }
 .shell-analytics { --canvas: #0b1630; }
-.shell-recurring { --canvas: #e8dcc6; }
-.shell-settings { --canvas: #f5ecdc; }
+.shell-recurring { --canvas: #112145; }
+.shell-settings { --canvas: #0f1d3a; }
 .shell { --bg: var(--canvas); }
 
 /* Card colour per route (opposite tone to the canvas). */
@@ -556,3 +556,66 @@
 :focus-visible { outline-color: #ff6f5e; }
 .addform-input:focus, .addform-input:focus-visible { outline: none; }
 .addform-amount:focus-within { border-color: #ff6f5e; box-shadow: 0 0 0 4px rgba(255, 111, 94, 0.18); }
+
+/* ============================================================
+   HARBOUR v2 — navy everywhere behind, orange-cream boxes that
+   warm into coral at one corner ("coral fusion").
+   ============================================================ */
+:root {
+  --fuse: linear-gradient(155deg, #fae7d1 0%, #f6d4b2 58%, #f2a88f 100%);
+  --fuse-soft: linear-gradient(155deg, #fbecda 0%, #f8dcc0 70%, #f5c3a8 100%);
+  --fuse-hot: linear-gradient(155deg, #fbdcc6 0%, #f6a890 62%, #ee8670 100%);
+}
+.shell[data-card='light'] { --card-bg: var(--fuse); --card-shadow: rgba(2, 6, 18, 0.75); }
+.shell .main .card { background: var(--card-bg); }
+
+/* Accent cards: same family, a little warmer or cooler */
+.shell .main .alloc-card.a-yellow { background: var(--fuse-hot); }
+.shell .main .insight-card:nth-child(4n + 1) { background: var(--fuse-hot); }
+.shell .main .insight-card:nth-child(4n + 2) { background: var(--fuse); }
+.shell .main .insight-card:nth-child(4n + 3) { background: var(--fuse-soft); }
+.shell .main .insight-card:nth-child(4n + 4) { background: var(--fuse); }
+.shell .main .goal-card:nth-child(3n + 2) { background: var(--fuse-soft); }
+.shell .main .goal-card:nth-child(3n + 3) { background: var(--fuse-hot); }
+.shell .main .stat-card.tone-red { background: var(--fuse-hot); }
+.shell .main .stat-card.tone-green { background: var(--fuse-soft); }
+.shell .main .stat-card.tone-purple { background: var(--fuse); }
+.shell .main .budget-card.state-over { background: var(--fuse-hot); }
+
+/* Big numbers sit on cream now */
+.hero-num, .sts-num { color: var(--text) !important; }
+.hero-num .amt-real, .hero-num .amt-mask { color: var(--text); }
+.hero-split { background: rgba(15, 29, 58, 0.12); }
+.hs-strict { background: #2c4a7c; }
+.shell .main .hero-balance::before {
+  border-color: rgba(15, 29, 58, 0.12);
+  box-shadow: 0 0 0 46px rgba(15, 29, 58, 0.03), 0 0 0 92px rgba(15, 29, 58, 0.025);
+}
+
+/* Auth + onboarding: navy page, fused cream card */
+.auth-page, .onb-wrap {
+  background: #0f1d3a;
+  --text: #fbf5ea;
+  --text-soft: rgba(251, 245, 234, 0.75);
+  --text-faint: rgba(251, 245, 234, 0.55);
+  --ink: #f7dcbd;
+  color: var(--text);
+}
+.auth-logo .logo-word { color: #f7dcbd; }
+.auth-card, .onb-card {
+  background: var(--fuse);
+  --text: #0f1d3a;
+  --text-soft: #34415e;
+  --text-faint: #56627c;
+  --ink: #0f1d3a;
+  --surface-2: rgba(15, 29, 58, 0.07);
+  --surface-hover: rgba(15, 29, 58, 0.12);
+  --border: rgba(15, 29, 58, 0.16);
+  --border-strong: rgba(15, 29, 58, 0.3);
+  color: #0f1d3a;
+  box-shadow: 0 50px 100px -40px rgba(0, 0, 0, 0.75);
+}
+.auth-card h1, .onb-card h2 { color: #0f1d3a; }
+.auth-page .card.privacy-doc { background: var(--fuse-soft) !important; }
+.shell .main .card .privacy-toggle { background: #0f1d3a; color: #f7dcbd; border-color: transparent; }
+.shell .main .card .privacy-toggle:hover { background: #ff6f5e; color: #0f1d3a; }

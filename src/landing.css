@@ -9,8 +9,8 @@
    ============================================================ */
 
 .lx {
-  --y: #f5ecdc;
-  --y-soft: #fbf5ea;
+  --y: #f7dcbd;
+  --y-soft: #fae7d1;
   --ink: #0f1d3a;
   --ink-2: #18294d;
   --ink-soft: #4a5670;
@@ -499,3 +499,36 @@
   .caret { animation: none; }
   .lx * { transition-duration: 0.01ms !important; }
 }
+
+/* ============================================================
+   Harbour v2: every section is navy; boxes are orange-cream
+   that warm into coral. Sections that used to be light flip
+   their tokens (data-flip), so their dark boxes turn cream.
+   ============================================================ */
+.lx { background: #0f1d3a; --fuse: linear-gradient(155deg, #fae7d1 0%, #f6d4b2 58%, #f2a88f 100%); }
+.lx [data-flip] {
+  --y: #1b2f5c;
+  --y-soft: #1b2f5c;
+  --aqua: #1b2f5c;
+  --ink: #f7dcbd;
+  --ink-2: #f2c9a4;
+  --ink-soft: rgba(247, 220, 189, 0.75);
+  background-color: #0f1d3a;
+  color: #f7dcbd;
+}
+.lx .lx-hero[data-flip], .lx .lx-search[data-flip] { background-color: #112145; }
+.lx [data-flip] .lx-btn-solid { background: var(--ink); color: #0f1d3a; border-color: var(--ink); }
+.lx [data-flip] .lx-btn-ghost { color: var(--ink); border-color: var(--ink); }
+.lx [data-flip] .lx-btn-ghost:hover { background: var(--ink); color: #0f1d3a; }
+.lx [data-flip] .k-ink { background: var(--ink); color: #0f1d3a; }
+
+/* Cream boxes get the coral fusion */
+.lx [data-flip] .c-ink,
+.lx [data-flip] .search-box,
+.lx [data-flip] .sv,
+.lx .mini:not(:nth-child(3n + 2)),
+.lx .ms-static-card,
+.lx .c-yellow { background: var(--fuse); color: #0f1d3a; }
+.lx [data-flip] .c-ink .b-ic, .lx [data-flip] .search-box .b-ic { background: #0f1d3a; color: #f7dcbd; }
+.lx .c-yellow .b-ic { background: #0f1d3a; color: #f7dcbd; }
+.lx [data-flip] .lx-pill, .lx [data-flip] .lx-toast-ink { background: var(--fuse); color: #0f1d3a; }

@@ -41,13 +41,13 @@ function pageTheme(pathname: string): string {
 
 /** Per-route canvas: colour, whether the canvas is dark, card tone, and the drifting backdrop word. */
 const CANVAS: Record<string, { color: string; dark: boolean; card: 'dark' | 'light'; word: string }> = {
-  dash: { color: '#f5ecdc', dark: false, card: 'dark', word: 'where it stands · ' },
-  txns: { color: '#0f1d3a', dark: true, card: 'light', word: 'every rupee · ' },
-  budgets: { color: '#fbf5ea', dark: false, card: 'dark', word: "what's left · " },
+  dash: { color: '#0f1d3a', dark: true, card: 'light', word: 'where it stands · ' },
+  txns: { color: '#0d1a35', dark: true, card: 'light', word: 'every rupee · ' },
+  budgets: { color: '#112145', dark: true, card: 'light', word: "what's left · " },
   goals: { color: '#142850', dark: true, card: 'light', word: 'save it up · ' },
   analytics: { color: '#0b1630', dark: true, card: 'light', word: 'the big picture · ' },
-  recurring: { color: '#e8dcc6', dark: false, card: 'dark', word: 'no surprises · ' },
-  settings: { color: '#f5ecdc', dark: false, card: 'dark', word: 'your rules · ' },
+  recurring: { color: '#112145', dark: true, card: 'light', word: 'no surprises · ' },
+  settings: { color: '#0f1d3a', dark: true, card: 'light', word: 'your rules · ' },
 }
 
 /** Freezes the outlet for an exiting page so it can animate out with its old content. */
