@@ -6,6 +6,7 @@ import { PrivacyToast, SwipeToasts } from './ui'
 
 import { Gear, Home, ListIcon, Logout, Pie, Repeat, Target, UserIcon, Plus } from './Icons'
 import LedgerLogo from './Logo'
+import { useRouteMotion, useSmoothScroll } from '../lib/motion'
 
 const NAV = [
   { to: '/app', label: 'Dashboard', icon: Home, end: true },
@@ -40,13 +41,13 @@ function pageTheme(pathname: string): string {
 
 /** Per-route canvas: colour, whether the canvas is dark, card tone, and the drifting backdrop word. */
 const CANVAS: Record<string, { color: string; dark: boolean; card: 'dark' | 'light'; word: string }> = {
-  dash: { color: '#ffd93d', dark: false, card: 'dark', word: 'where it stands ✦ ' },
-  txns: { color: '#a6e4df', dark: false, card: 'dark', word: 'every rupee ✦ ' },
-  budgets: { color: '#ff4f81', dark: false, card: 'dark', word: "what's left ✦ " },
-  goals: { color: '#0a4f57', dark: true, card: 'light', word: 'save it up ✦ ' },
-  analytics: { color: '#17140f', dark: true, card: 'light', word: 'the big picture ✦ ' },
-  recurring: { color: '#ffc6d6', dark: false, card: 'dark', word: 'no surprises ✦ ' },
-  settings: { color: '#ffe873', dark: false, card: 'dark', word: 'your rules ✦ ' },
+  dash: { color: '#f5ecdc', dark: false, card: 'dark', word: 'where it stands · ' },
+  txns: { color: '#0f1d3a', dark: true, card: 'light', word: 'every rupee · ' },
+  budgets: { color: '#fbf5ea', dark: false, card: 'dark', word: "what's left · " },
+  goals: { color: '#142850', dark: true, card: 'light', word: 'save it up · ' },
+  analytics: { color: '#0b1630', dark: true, card: 'light', word: 'the big picture · ' },
+  recurring: { color: '#e8dcc6', dark: false, card: 'dark', word: 'no surprises · ' },
+  settings: { color: '#f5ecdc', dark: false, card: 'dark', word: 'your rules · ' },
 }
 
 /** Freezes the outlet for an exiting page so it can animate out with its old content. */
@@ -56,12 +57,25 @@ function FrozenOutlet() {
   return frozen
 }
 
+/** One route's stage: the frozen page plus its GSAP entrance. */
+function Stage({ scroller }: { scroller: React.RefObject<HTMLElement | null> }) {
+  const ref = useRef<HTMLDivElement>(null)
+  useRouteMotion(ref, scroller)
+  return (
+    <div ref={ref}>
+      <FrozenOutlet />
+    </div>
+  )
+}
+
 export default function Shell() {
   const { pathname } = useLocation()
   const theme = pageTheme(pathname)
   const canvas = CANVAS[theme]
   const reduced = useReducedMotion()
   const mainRef = useRef<HTMLElement>(null)
+  const innerRef = useRef<HTMLDivElement>(null)
+  useSmoothScroll(mainRef, innerRef)
 
   /* Pointer glare: one delegated listener feeds the hovered card its local coordinates. */
   useEffect(() => {
@@ -88,18 +102,20 @@ export default function Shell() {
     >
       <Sidebar />
       <main className="main" id="main" ref={mainRef}>
-        <AnimatePresence mode="wait" initial={false}>
-          <motion.div
-            key={pathname}
-            className="route-stage"
-            initial={reduced ? { opacity: 0 } : { opacity: 0, y: 70, rotate: 1.2, scale: 0.97 }}
-            animate={{ opacity: 1, y: 0, rotate: 0, scale: 1 }}
-            exit={reduced ? { opacity: 0 } : { opacity: 0, y: -50, scale: 0.98 }}
-            transition={{ type: 'spring', stiffness: 220, damping: 26, opacity: { duration: 0.25 } }}
-          >
-            <FrozenOutlet />
-          </motion.div>
-        </AnimatePresence>
+        <div className="main-inner" ref={innerRef}>
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.div
+              key={pathname}
+              className="route-stage"
+              initial={reduced ? { opacity: 0 } : { opacity: 0, y: 24 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={reduced ? { opacity: 0 } : { opacity: 0, y: -18 }}
+              transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
+            >
+              <Stage scroller={mainRef} />
+            </motion.div>
+          </AnimatePresence>
+        </div>
       </main>
       {/* Colour curtain: sweeps up in the new page's canvas colour on every route change. */}
       {!reduced && (

@@ -12,7 +12,7 @@ export type StickerKind =
   | 'coin-stack' | 'coin' | 'wallet' | 'receipt' | 'jar' | 'card'
   | 'notebook' | 'sparkle' | 'star' | 'ticket'
 
-const INK = '#241f1a'
+const INK = '#0f1d3a'
 
 export function StickerGlyph({ kind, size = 44 }: { kind: StickerKind; size?: number }) {
   const s = { width: size, height: size } as const
@@ -20,9 +20,9 @@ export function StickerGlyph({ kind, size = 44 }: { kind: StickerKind; size?: nu
     case 'coin-stack':
       return (
         <svg {...s} viewBox="0 0 48 48" fill="none" aria-hidden="true">
-          <ellipse cx="24" cy="35" rx="15" ry="5.5" fill="#ffd93d" stroke={INK} strokeWidth="2.4" />
-          <ellipse cx="24" cy="29" rx="15" ry="5.5" fill="#ffc24d" stroke={INK} strokeWidth="2.4" />
-          <ellipse cx="24" cy="23" rx="15" ry="5.5" fill="#ffd93d" stroke={INK} strokeWidth="2.4" />
+          <ellipse cx="24" cy="35" rx="15" ry="5.5" fill="#f5ecdc" stroke={INK} strokeWidth="2.4" />
+          <ellipse cx="24" cy="29" rx="15" ry="5.5" fill="#f5ecdc" stroke={INK} strokeWidth="2.4" />
+          <ellipse cx="24" cy="23" rx="15" ry="5.5" fill="#f5ecdc" stroke={INK} strokeWidth="2.4" />
           <ellipse cx="24" cy="15" rx="15" ry="5.5" fill="#ffe17d" stroke={INK} strokeWidth="2.4" />
           <path d="M18 9l2-2M24 8l0-2.4M30 9l-2-2" stroke={INK} strokeWidth="2.2" strokeLinecap="round" />
         </svg>
@@ -30,7 +30,7 @@ export function StickerGlyph({ kind, size = 44 }: { kind: StickerKind; size?: nu
     case 'coin':
       return (
         <svg {...s} viewBox="0 0 48 48" fill="none" aria-hidden="true">
-          <circle cx="24" cy="24" r="13" fill="#ffd93d" stroke={INK} strokeWidth="2.6" />
+          <circle cx="24" cy="24" r="13" fill="#f5ecdc" stroke={INK} strokeWidth="2.6" />
           <circle cx="24" cy="24" r="7.5" fill="none" stroke="#b8860b" strokeWidth="2" />
           <path d="M21 21h6M24 21v7" stroke={INK} strokeWidth="2.2" strokeLinecap="round" />
         </svg>
@@ -47,9 +47,9 @@ export function StickerGlyph({ kind, size = 44 }: { kind: StickerKind; size?: nu
     case 'receipt':
       return (
         <svg {...s} viewBox="0 0 48 48" fill="none" aria-hidden="true">
-          <path d="M12 7h24l-2.5 4 2.5 4-2.5 4 2.5 4-2.5 4 2.5 4-2.5 3H14l2.5 3H12z" fill="#fffdf6" stroke={INK} strokeWidth="2.4" strokeLinejoin="round" />
+          <path d="M12 7h24l-2.5 4 2.5 4-2.5 4 2.5 4-2.5 4 2.5 4-2.5 3H14l2.5 3H12z" fill="#fbf5ea" stroke={INK} strokeWidth="2.4" strokeLinejoin="round" />
           <path d="M18 16h13M18 22h13M18 28h8" stroke={INK} strokeWidth="2" strokeLinecap="round" opacity="0.7" />
-          <path d="M12 14l2.5 4L12 22l2.5 4" fill="#fffdf6" stroke={INK} strokeWidth="2.4" strokeLinejoin="round" />
+          <path d="M12 14l2.5 4L12 22l2.5 4" fill="#fbf5ea" stroke={INK} strokeWidth="2.4" strokeLinejoin="round" />
         </svg>
       )
     case 'jar':
@@ -57,7 +57,7 @@ export function StickerGlyph({ kind, size = 44 }: { kind: StickerKind; size?: nu
         <svg {...s} viewBox="0 0 48 48" fill="none" aria-hidden="true">
           <path d="M15 15h18l3 6v16a5 5 0 0 1-5 5H17a5 5 0 0 1-5-5V21z" fill="#b6f2dd" stroke={INK} strokeWidth="2.6" />
           <rect x="14" y="9" width="20" height="7" rx="3" fill={INK} />
-          <circle cx="20" cy="32" r="3.2" fill="#ffd93d" stroke={INK} strokeWidth="2" />
+          <circle cx="20" cy="32" r="3.2" fill="#f5ecdc" stroke={INK} strokeWidth="2" />
           <circle cx="27" cy="35" r="3.2" fill="#ff8a5c" stroke={INK} strokeWidth="2" />
         </svg>
       )
@@ -65,8 +65,8 @@ export function StickerGlyph({ kind, size = 44 }: { kind: StickerKind; size?: nu
       return (
         <svg {...s} viewBox="0 0 48 48" fill="none" aria-hidden="true">
           <rect x="6" y="13" width="36" height="23" rx="5" fill="#ff78ac" stroke={INK} strokeWidth="2.6" transform="rotate(-4 24 24)" />
-          <path d="M6 21h36" stroke="#fff" strokeWidth="4" />
-          <circle cx="36" cy="30" r="2.4" fill="#fff" />
+          <path d="M6 21h36" stroke="#fbf5ea" strokeWidth="4" />
+          <circle cx="36" cy="30" r="2.4" fill="#fbf5ea" />
         </svg>
       )
     case 'notebook':
@@ -81,7 +81,7 @@ export function StickerGlyph({ kind, size = 44 }: { kind: StickerKind; size?: nu
     case 'sparkle':
       return (
         <svg {...s} viewBox="0 0 48 48" fill="none" aria-hidden="true">
-          <path d="M24 4l3.2 13.8L41 24l-13.8 3.2L24 41l-3.2-13.8L7 24l13.8-3.2z" fill="#ffd93d" stroke={INK} strokeWidth="2.4" strokeLinejoin="round" />
+          <path d="M24 4l3.2 13.8L41 24l-13.8 3.2L24 41l-3.2-13.8L7 24l13.8-3.2z" fill="#f5ecdc" stroke={INK} strokeWidth="2.4" strokeLinejoin="round" />
           <path d="M38 6l1.2 4.8L44 12l-4.8 1.2L38 18l-1.2-4.8L32 12l4.8-1.2z" fill="#ff8a5c" stroke={INK} strokeWidth="1.8" strokeLinejoin="round" />
         </svg>
       )

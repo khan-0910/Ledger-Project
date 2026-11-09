@@ -19,10 +19,12 @@ import Goals from './pages/Goals'
 import Analytics from './pages/Analytics'
 import Recurring from './pages/Recurring'
 import Settings from './pages/Settings'
+import { getAppLenis } from './lib/motion'
 
 function ScrollToTop() {
   const { pathname } = useLocation()
   useEffect(() => {
+    getAppLenis()?.scrollTo(0, { immediate: true, force: true })
     document.getElementById('main')?.scrollTo({ top: 0 })
     window.scrollTo({ top: 0 })
   }, [pathname])

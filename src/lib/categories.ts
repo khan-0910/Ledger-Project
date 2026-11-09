@@ -30,7 +30,7 @@ export const CATEGORIES: CategoryDef[] = [
     label: 'Food & Drinks',
     emoji: '🍜',
     glyph: 'food',
-    color: '#e8a71c',
+    color: '#ff6f5e',
     softVar: '--yellow-soft',
     examples: ['Meals', 'Snacks', 'Coffee', 'Delivery'],
   },
@@ -39,7 +39,7 @@ export const CATEGORIES: CategoryDef[] = [
     label: 'Groceries & Supplies',
     emoji: '🧺',
     glyph: 'groceries',
-    color: '#1f9d55',
+    color: '#6fae8f',
     softVar: '--green-soft',
     examples: ['Groceries', 'Toiletries', 'Essentials'],
   },
@@ -48,7 +48,7 @@ export const CATEGORIES: CategoryDef[] = [
     label: 'Education',
     emoji: '📚',
     glyph: 'education',
-    color: '#2f6fd0',
+    color: '#4f7cc4',
     softVar: '--blue-soft',
     examples: ['Books', 'Stationery', 'Courses'],
   },
@@ -57,7 +57,7 @@ export const CATEGORIES: CategoryDef[] = [
     label: 'Transport',
     emoji: '🛺',
     glyph: 'transport',
-    color: '#7d55d6',
+    color: '#d9a441',
     softVar: '--purple-soft',
     examples: ['Bus / Metro', 'Auto', 'Fuel'],
   },
@@ -66,7 +66,7 @@ export const CATEGORIES: CategoryDef[] = [
     label: 'Entertainment',
     emoji: '🎬',
     glyph: 'entertainment',
-    color: '#e04f2f',
+    color: '#b07aa1',
     softVar: '--red-soft',
     examples: ['Games', 'Movies', 'Subscriptions'],
   },
@@ -75,7 +75,7 @@ export const CATEGORIES: CategoryDef[] = [
     label: 'Shopping',
     emoji: '🛍️',
     glyph: 'shopping',
-    color: '#d95d9a',
+    color: '#e8908a',
     softVar: '--pink-soft',
     examples: ['Clothes', 'Electronics', 'Other'],
   },
@@ -84,7 +84,7 @@ export const CATEGORIES: CategoryDef[] = [
     label: 'College / Living',
     emoji: '🏠',
     glyph: 'living',
-    color: '#4a9f8c',
+    color: '#5a9aa8',
     softVar: '--teal-soft',
     examples: ['Hostel', 'Rent', 'Utilities'],
   },
@@ -93,7 +93,7 @@ export const CATEGORIES: CategoryDef[] = [
     label: 'Income',
     emoji: '💸',
     glyph: 'income',
-    color: '#b6d83c',
+    color: '#8fdcbc',
     softVar: '--accent-soft',
     examples: ['Allowance', 'Salary', 'Freelance'],
   },
@@ -102,7 +102,7 @@ export const CATEGORIES: CategoryDef[] = [
     label: 'Other',
     emoji: '📦',
     glyph: 'other',
-    color: '#8b9080',
+    color: '#9aa3b5',
     softVar: '--surface-hover',
     examples: ['Misc'],
   },
@@ -118,7 +118,7 @@ export function category(id: string): CategoryDef {
 
 /** Extra soft color tokens used by some categories. */
 export const EXTRA_SOFT_VARS = `
-:root { --pink-soft: #fbe7f0; --teal-soft: #e1f2ef; --accent-soft: #f2f8d8; }
+:root { --pink-soft: #fbe3e1; --teal-soft: #e2eef0; --accent-soft: #e6f5ee; }
 :root[data-theme='dark'] {
   --pink-soft: rgba(217, 93, 154, 0.14);
   --teal-soft: rgba(74, 159, 140, 0.14);

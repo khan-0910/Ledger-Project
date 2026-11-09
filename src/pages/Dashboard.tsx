@@ -74,7 +74,7 @@ export default function Dashboard() {
         transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
         aria-label="Total balance"
       >
-        <SpotlightCard className="hero-balance card" spotlightColor="rgba(255, 107, 107, 0.16)">
+        <SpotlightCard className="hero-balance card" spotlightColor="rgba(255, 111, 94, 0.16)">
           <div className="hero-left">
             <span className="eyebrow">Total balance</span>
             <div className="hero-amount-row">
@@ -137,7 +137,7 @@ export default function Dashboard() {
                 value={Math.round(clampPercent(gfPct))}
                 interactive={false}
                 showValue={false}
-                liquidColor={gfTone === 'empty' ? '#ff6b6b' : gfTone === 'low' ? '#ffb020' : '#ffd93d'}
+                liquidColor={gfTone === 'empty' ? '#ff6f5e' : gfTone === 'low' ? '#ffb3a6' : '#f5ecdc'}
                 glassColor="rgba(140, 120, 90, 0.12)"
                 width={96}
                 height={130}
@@ -231,7 +231,7 @@ export default function Dashboard() {
           <Link to="/app/transactions" className="see-link">See all →</Link>
         </div>
         {recent.length === 0 ? (
-          <ClickSpark sparkColor="#ffd93d" sparkCount={10}>
+          <ClickSpark sparkColor="#ff6f5e" sparkCount={10}>
             <EmptyAdd onAdd={() => { setCelebrate((c) => c + 1); openAdd() }} />
           </ClickSpark>
         ) : (
@@ -244,7 +244,7 @@ export default function Dashboard() {
       </section>
 
       {/* FAB (mobile-first quick add) */}
-      <ClickSpark sparkColor="#ffd93d" sparkCount={12} sparkRadius={70}>
+      <ClickSpark sparkColor="#ff6f5e" sparkCount={12} sparkRadius={70}>
         <motion.button
           className="fab"
           onClick={openAdd}

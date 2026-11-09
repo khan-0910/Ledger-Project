@@ -34,6 +34,7 @@ import {
   Target,
   Upload,
 } from '../components/Icons'
+import { useSmoothScroll } from '../lib/motion'
 import '../landing.css'
 
 /* Fictional demo numbers — minor units, clearly labelled as demo. */
@@ -1201,10 +1202,10 @@ function TiltCard({ children, i }: { children: React.ReactNode; i: number }) {
 
 function MoreFeatures() {
   return (
-    <section className="lx-more" data-nav="light">
+    <section className="lx-more" data-nav="dark">
       <div className="lx-wrap">
         <Reveal className="lx-head">
-          <span className="lx-kicker k-ink">That's not all</span>
+          <span className="lx-kicker k-yellow">That's not all</span>
           <h2 className="lx-title">Small things, <span className="serif-it">done properly.</span></h2>
         </Reveal>
         <div className="mini-grid">
@@ -1319,6 +1320,7 @@ function Footer({ onDemo }: { onDemo: () => void }) {
 export default function Landing() {
   const { demoSignIn } = useApp()
   const navigate = useNavigate()
+  useSmoothScroll()
   /** One-click demo entry: sign into the seeded account, then move into the app. */
   const runDemo = () => {
     void demoSignIn().then((err) => {

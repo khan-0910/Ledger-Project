@@ -169,7 +169,8 @@ function BarChart({ points, color }: { points: { label: string; value: number; t
             )}
             <motion.div
               className="bar-fill"
-              style={{ background: p.value === 0 ? 'var(--bg-dim)' : color }}
+              // Navy bars; only the biggest day takes the accent colour.
+              style={{ background: p.value === 0 ? 'var(--bg-dim)' : p.value === max ? color : 'var(--text)' }}
               initial={{ height: 0 }}
               whileInView={{ height: `${Math.max(p.value === 0 ? 3 : 6, (p.value / max) * 100)}%` }}
               viewport={{ once: true }}

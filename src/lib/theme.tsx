@@ -15,7 +15,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     document.documentElement.dataset.theme = 'dark'
     const meta = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]:not([media])')
-    if (meta) meta.setAttribute('content', '#101311')
+    if (meta) meta.setAttribute('content', '#0f1d3a')
   }, [])
 
   return <Ctx.Provider value={{ theme: 'dark', toggle: () => {} }}>{children}</Ctx.Provider>
