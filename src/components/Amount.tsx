@@ -56,7 +56,11 @@ export interface AmountProps {
   ariaLabel?: string
   /** Opt-in masking: render the dual mask/real layers (Dashboard balances). */
   maskable?: boolean
+  /** Tween from the old value to the new one when it changes (plain amounts only). */
+  count?: boolean
 }
+
+const reducedMotion = () => typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
 /**
  * The one true money renderer.
@@ -68,12 +72,13 @@ export interface AmountProps {
  * data-privacy>` crossfades between them in pure CSS: no React re-render,
  * no layout shift. The state changes only via the Show/Hide button.
  */
-export function Amount({ value, decimals, signed, compact, className, ariaLabel, maskable }: AmountProps) {
+export function Amount({ value, decimals, signed, compact, className, ariaLabel, maskable, count }: AmountProps) {
   const mode = usePrivacyMode()
+  const shown = useCountUp(value, !!count && !maskable && !reducedMotion(), 650)
   if (!maskable) {
     return (
-      <span className={`amt ${className ?? ''}`} aria-label={ariaLabel}>
-        {formatINR(value, { decimals, signed, compact })}
+      <span className={`amt ${className ?? ''}`} aria-label={ariaLabel ?? (count ? formatINR(value, { decimals, signed, compact }) : undefined)}>
+        {formatINR(count ? shown : value, { decimals, signed, compact })}
       </span>
     )
   }

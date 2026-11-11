@@ -19,7 +19,11 @@ import { insights as buildInsights, type Insight } from '../lib/insights'
 import { usePrivacyText } from '../components/Amount'
 import type { SafeRange } from '../lib/selectors'
 import type { Txn } from '../lib/types'
-import { Sparkle } from '../components/Icons'
+import { TideChart, RankBars } from '../components/charts/Flow'
+import { dailySeries, spendByCategory, txnsInMonth } from '../lib/selectors'
+import { category } from '../lib/categories'
+import { formatINR } from '../lib/money'
+import { todayISO } from '../lib/dates'
 
 export default function Dashboard() {
   const { user, data } = useApp()
@@ -55,6 +59,9 @@ export default function Dashboard() {
     gf: total > 0 ? clampPercent((profile.guiltFreeMinor / total) * 100) : 0,
   }
 
+  const tide = tideData(txns, monthKey)
+  const where = whereItWent(txns, monthKey)
+
   const gfPct = model.guiltFreePctRemaining
   const gfTone = gfPct === 0 ? 'empty' : gfPct <= 25 ? 'low' : 'ok'
 
@@ -62,8 +69,8 @@ export default function Dashboard() {
     <div className="page">
       <header className="page-head">
         <div>
+          <p className="page-kicker">{todayLabel()} · {daysLeft} {daysLeft === 1 ? 'day' : 'days'} left in {monthLabel(monthKey)}</p>
           <h1 className="page-title">{greeting()}{user?.name ? `, ${user.name.split(' ')[0]}` : ''}</h1>
-          <p className="page-sub muted">Here's where your money stands.</p>
         </div>
       </header>
 
@@ -81,11 +88,16 @@ export default function Dashboard() {
               <Amount className="display-num hero-num" value={total} ariaLabel="Total balance" maskable />
               <BalanceToggle compact />
             </div>
-            <span className="hero-updated faint">Updated today · includes this month's activity</span>
+            <span className="hero-updated faint">Includes this month's activity</span>
           </div>
           <div className="hero-split" aria-hidden>
             <span className="hs hs-strict" style={{ width: `${allocationPcts.strict}%` }} />
             <span className="hs hs-gf" style={{ width: `${allocationPcts.gf}%` }} />
+          </div>
+          <div className="hero-legend">
+            <span><i className="hl-strict" />Savings {Math.round(allocationPcts.strict)}%</span>
+            <span><i className="hl-gf" />Guilt-free {Math.round(allocationPcts.gf)}%</span>
+            <span><i className="hl-rest" />Everything else {Math.max(0, 100 - Math.round(allocationPcts.strict) - Math.round(allocationPcts.gf))}%</span>
           </div>
         </SpotlightCard>
       </motion.section>
@@ -93,21 +105,49 @@ export default function Dashboard() {
       {/* ALLOCATION CARDS */}
       <section className="alloc-row" aria-label="Money allocation">
         <AllocCard
-          label="Strict Savings"
-          note="Don't touch"
+          label="Strict savings"
+          note="Not for spending"
           value={profile.strictSavingsMinor}
           pct={allocationPcts.strict}
           cls="a-green"
           delay={0}
         />
         <AllocCard
-          label="Guilt-Free"
-          note="Yours to spend"
+          label="Guilt-free left"
+          note="Yours to spend this month"
           value={model.guiltFreeRemaining}
           pct={allocationPcts.gf}
           cls="a-yellow"
           delay={0}
         />
+      </section>
+
+      {/* THIS MONTH: running spend vs last month + where it went */}
+      <section className="dash-flow" aria-label="This month">
+        <div className="card tide-card">
+          <div className="tide-head">
+            <div>
+              <h2 className="card-title">This month so far</h2>
+              <p className="tide-sub">{tide.compare}</p>
+            </div>
+            <div className="tide-figure">
+              <span className="tide-num">{formatINR(tide.spent)}</span>
+              <span className="tide-cap">spent by day {tide.today}</span>
+            </div>
+          </div>
+          <TideChart current={tide.current} previous={tide.previous} days={tide.days} today={tide.today} />
+          <div className="flow-key">
+            <span><i className="k-cur" />This month</span>
+            <span><i className="k-prev" />Last month</span>
+            <span><i className="k-proj" />At this pace</span>
+          </div>
+        </div>
+        <div className="card rank-card">
+          <h2 className="card-title">Where it went</h2>
+          <p className="tide-sub">{monthLabelLong(monthKey)} by category</p>
+          {where.rows.length ? <RankBars rows={where.rows} total={where.total} /> : <p className="faint rank-empty">Nothing spent yet this month</p>}
+          <Link to="/app/analytics" className="see-link">Full breakdown</Link>
+        </div>
       </section>
 
       {/* GUILT-FREE SLOSH + SAFE TO SPEND */}
@@ -121,13 +161,13 @@ export default function Dashboard() {
         >
           <div className="gf-head">
             <div>
-              <h2 className="card-title">Guilt-Free Spending</h2>
+              <h2 className="card-title">Guilt-free spending</h2>
               <p className="muted gf-sub">
                 {gfTone === 'empty'
-                  ? "You've reached your guilt-free spending limit."
+                  ? "You've reached your guilt-free limit"
                   : gfTone === 'low'
-                    ? "You're getting close to your guilt-free limit."
-                    : 'Spend it on what makes you happy.'}
+                    ? "You're getting close to your guilt-free limit"
+                    : 'Spend it on what makes you happy'}
               </p>
             </div>
           </div>
@@ -149,7 +189,7 @@ export default function Dashboard() {
               <span className="gf-liquid-pct display-num">{Math.round(gfPct)}%</span>
             </div>
             <div className="gf-nums">
-              <Amount className="display-num gf-num" value={model.guiltFreeRemaining} ariaLabel="Guilt-free remaining" />
+              <Amount count className="display-num gf-num" value={model.guiltFreeRemaining} ariaLabel="Guilt-free remaining" />
               <span className="gf-remaining faint">remaining</span>
               <ProgressBar pct={gfPct} color="var(--yellow)" height={12} />
               <div className="gf-stats">
@@ -169,7 +209,7 @@ export default function Dashboard() {
           aria-label="Safe to spend"
         >
           <div className="sts-head">
-            <h2 className="card-title">Safe to Spend</h2>
+            <h2 className="card-title">Safe to spend</h2>
             <Segmented
               size="sm"
               options={[
@@ -182,7 +222,7 @@ export default function Dashboard() {
             />
           </div>
           <div className="sts-value">
-            <Amount className="display-num sts-num" value={safe} ariaLabel={`Safe to spend ${rangeLabel}`} />
+            <Amount count className="display-num sts-num" value={safe} ariaLabel={`Safe to spend ${rangeLabel}`} />
           </div>
           <p className="sts-support muted">{supportText}</p>
           {(model.mabEnabled || model.essentialsRemaining > 0) && (
@@ -213,8 +253,8 @@ export default function Dashboard() {
       {insights.length > 0 && (
         <section className="dash-insights" aria-label="Your money story">
           <div className="sec-head">
-            <h2 className="sec-title"><Sparkle size={17} /> Your Money Story</h2>
-            <Link to="/app/analytics" className="see-link">Full analytics →</Link>
+            <h2 className="sec-title">Your money story</h2>
+            <Link to="/app/analytics" className="see-link">Full analytics</Link>
           </div>
           <div className="insight-row">
             {insights.slice(0, 4).map((ins, i) => (
@@ -228,7 +268,7 @@ export default function Dashboard() {
       <section className="dash-recent">
         <div className="sec-head">
           <h2 className="sec-title">Recent activity</h2>
-          <Link to="/app/transactions" className="see-link">See all →</Link>
+          <Link to="/app/transactions" className="see-link">See all</Link>
         </div>
         {recent.length === 0 ? (
           <ClickSpark sparkColor="#ff6f5e" sparkCount={10}>
@@ -248,8 +288,7 @@ export default function Dashboard() {
         <motion.button
           className="fab"
           onClick={openAdd}
-          whileTap={{ scale: 0.9 }}
-          whileHover={{ scale: 1.06, rotate: 4 }}
+          whileTap={{ scale: 0.94 }}
           aria-label="Add expense"
         >
           +
@@ -260,6 +299,50 @@ export default function Dashboard() {
       <span hidden data-celebrate={celebrate} />
     </div>
   )
+}
+
+function prevMonthKey(key: string): string {
+  const [y, m] = key.split('-').map(Number)
+  const d = new Date(y, m - 2, 1)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+}
+
+function todayLabel(): string {
+  return new Date().toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })
+}
+
+function monthLabelLong(key: string): string {
+  const [y, m] = key.split('-').map(Number)
+  return new Date(y, m - 1, 1).toLocaleDateString('en-IN', { month: 'long' })
+}
+
+/** Running spend this month (to today) against last month's running spend. */
+function tideData(txns: Txn[], monthKey: string) {
+  const cur = dailySeries(txns, monthKey)
+  const prev = dailySeries(txns, prevMonthKey(monthKey))
+  const t = todayISO()
+  const today = t.startsWith(monthKey) ? Number(t.slice(8)) : cur.length
+  const current = cur.slice(0, today).map((p) => p.cumulative)
+  const previous = prev.map((p) => p.cumulative)
+  const spent = current[current.length - 1] ?? 0
+  const then = previous[Math.min(today, previous.length) - 1] ?? 0
+  const diff = spent - then
+  const compare =
+    then === 0 && spent === 0 ? 'No spending yet this month or last'
+      : Math.abs(diff) < 100 ? 'Same as this point last month'
+        : `${formatINR(Math.abs(diff))} ${diff < 0 ? 'less' : 'more'} than this point last month`
+  return { current, previous, days: cur.length, today, spent, compare }
+}
+
+function whereItWent(txns: Txn[], monthKey: string) {
+  const map = spendByCategory(txnsInMonth(txns, monthKey))
+  const all = Array.from(map).map(([id, value]) => ({ id, value })).sort((a, b) => b.value - a.value)
+  const total = all.reduce((a, r) => a + r.value, 0)
+  const rows = all.slice(0, 6).map((r) => {
+    const def = category(r.id)
+    return { id: r.id, label: def.label, color: def.color, value: r.value }
+  })
+  return { rows, total }
 }
 
 function monthLabel(key: string): string {
@@ -309,7 +392,7 @@ function InsightCard({ ins, delay }: { ins: Insight; delay: number }) {
 function EmptyAdd({ onAdd }: { onAdd: () => void }) {
   return (
     <div className="empty card">
-      <h3>Your Ledger is suspiciously quiet.</h3>
+      <h3>Nothing logged yet</h3>
       <p className="muted">Add your first expense and start understanding where your money goes.</p>
       <button className="btn btn-accent" onClick={onAdd}>Add transaction</button>
     </div>

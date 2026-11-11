@@ -9,8 +9,8 @@
 
 :root {
   /* Typography */
-  --font-sans: 'Nunito', ui-rounded, system-ui, -apple-system, 'Segoe UI', sans-serif;
-  --font-display: 'Grandstander', 'Fraunces', Georgia, serif;
+  --font-sans: 'Archivo', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-display: 'Archivo', system-ui, sans-serif;
 
   /* Radius */
   --radius-xs: 10px;

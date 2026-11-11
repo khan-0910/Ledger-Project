@@ -4,9 +4,10 @@ import { useApp } from '../lib/store'
 import { Amount } from '../components/Amount'
 import { Segmented } from '../components/ui'
 import { CATEGORIES, category } from '../lib/categories'
-import { addDays, dayLabel, monthLabel as monthLabelOf, todayISO } from '../lib/dates'
-import { monthlySeries, spendByCategory, totalOf, txnsInLastDays, txnsInMonth } from '../lib/selectors'
+import { addDays, currentMonthKey, dayLabel, monthLabel as monthLabelOf, todayISO } from '../lib/dates'
+import { dailySeries, monthlySeries, spendByCategory, totalOf, txnsInLastDays, txnsInMonth } from '../lib/selectors'
 import { usePrivacyText } from '../components/Amount'
+import { FlowArea, SmoothLine, SpendCalendar, StreamChart, type StreamSeries } from '../components/charts/Flow'
 
 type Range = '7D' | '30D' | '3M' | '6M' | '1Y'
 const RANGES: Range[] = ['7D', '30D', '3M', '6M', '1Y']
@@ -49,12 +50,15 @@ export default function Analytics() {
     return Array.from(map).map(([id, val]) => ({ def: category(id), val })).sort((a, b) => b.val - a.val)
   }, [rangeTxns])
 
+  const stream = useMemo(() => streamData(txns, range), [txns, range])
+  const calendar = useMemo(() => dailySeries(txns, currentMonthKey()).map((d) => ({ date: d.date, value: d.expense })), [txns])
+
   return (
     <div className="page">
       <header className="page-head">
         <div>
           <h1 className="page-title">Analytics</h1>
-          <p className="page-sub muted">Where your money actually goes.</p>
+          <p className="page-sub muted">Where your money actually goes</p>
         </div>
         <div className="head-actions">
           <Segmented size="sm" options={RANGES.map((r) => ({ value: r, label: r }))} value={range} onChange={setRange} />
@@ -72,16 +76,28 @@ export default function Analytics() {
       {/* Spending chart */}
       <ChartCard title={days ? 'Daily spending' : 'Monthly spending'} sub={`Last ${days ?? months} ${days ? 'days' : 'months'}`}>
         {days ? (
-          <BarChart
-            points={dailyBars.map((d) => ({ label: d.date.slice(8), value: d.value, tip: dayLabel(d.date) }))}
-            color="var(--red)"
+          <FlowArea
+            label="Daily spending"
+            height={240}
+            points={dailyBars.map((d) => ({ label: String(Number(d.date.slice(8))), value: d.value, tip: dayLabel(d.date) }))}
           />
         ) : (
-          <BarChart
+          <FlowArea
+            label="Monthly spending"
+            height={240}
             points={series.map((p) => ({ label: p.label, value: p.expense, tip: monthLabelOf(p.key) }))}
-            color="var(--red)"
           />
         )}
+      </ChartCard>
+
+      {/* Category stream */}
+      <ChartCard title="How your spending flows" sub={stream.sub}>
+        <StreamChart series={stream.series} labels={stream.labels} />
+        <div className="flow-key">
+          {stream.series.map((s) => (
+            <span key={s.id}><i style={{ background: s.color }} />{s.label}</span>
+          ))}
+        </div>
       </ChartCard>
 
       <div className="an-two">
@@ -90,25 +106,66 @@ export default function Analytics() {
           <Donut data={catSpend} total={expense} />
         </ChartCard>
 
-        {/* Income vs expenses */}
-        <ChartCard title="Income vs expenses" sub={days ? `Last ${days} days` : `Last ${months} month${months > 1 ? 's' : ''}`}>
-          <CompareChart income={income} expense={expense} />
+        {/* Day-by-day calendar */}
+        <ChartCard title="Day by day" sub={monthLabelOf(currentMonthKey())}>
+          <SpendCalendar days={calendar} today={todayISO()} />
         </ChartCard>
       </div>
 
       {/* Savings trend */}
       <ChartCard title="Monthly savings" sub="Income minus expenses, per month" wide>
-        <LineChart points={savingsSeries.map((p) => ({ label: p.label, value: p.net }))} />
+        <SmoothLine label="Monthly savings trend" points={savingsSeries.map((p) => ({ label: p.label, value: p.net }))} />
       </ChartCard>
 
       {txns.length === 0 && (
         <div className="empty card">
-          <h3>Charts incoming.</h3>
-          <p className="muted">Add a few transactions and watch your patterns appear.</p>
+          <h3>No charts yet</h3>
+          <p className="muted">Add a few transactions and your patterns show up here.</p>
         </div>
       )}
     </div>
   )
+}
+
+/** Category totals per bucket: days for short ranges, weeks or months for long ones. */
+function streamData(txns: { type: string; date: string; category: string; amountMinor: number }[], range: Range) {
+  const today = todayISO()
+  const spec = {
+    '7D': { n: 7, size: 1, unit: 'day' },
+    '30D': { n: 10, size: 3, unit: 'day' },
+    '3M': { n: 13, size: 7, unit: 'day' },
+    '6M': { n: 26, size: 7, unit: 'day' },
+    '1Y': { n: 12, size: 0, unit: 'month' },
+  }[range]
+  const buckets: { from: string; to: string; label: string }[] = []
+  if (spec.unit === 'month') {
+    const now = new Date()
+    for (let i = spec.n - 1; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+      buckets.push({ from: `${key}-01`, to: `${key}-31`, label: d.toLocaleDateString('en-IN', { month: 'short' }) })
+    }
+  } else {
+    for (let i = spec.n - 1; i >= 0; i--) {
+      const to = addDays(today, -i * spec.size)
+      const from = addDays(to, -(spec.size - 1))
+      const d = new Date(to)
+      buckets.push({ from, to, label: d.toLocaleDateString('en-IN', spec.size === 1 ? { weekday: 'short' } : { day: 'numeric', month: 'short' }) })
+    }
+  }
+  const per = new Map<string, number[]>()
+  for (const t of txns) {
+    if (t.type !== 'expense') continue
+    const bi = buckets.findIndex((b) => t.date >= b.from && t.date <= b.to)
+    if (bi < 0) continue
+    if (!per.has(t.category)) per.set(t.category, Array(buckets.length).fill(0))
+    per.get(t.category)![bi] += t.amountMinor
+  }
+  const series: StreamSeries[] = Array.from(per)
+    .map(([id, values]) => ({ id, label: category(id).label, color: category(id).color, values }))
+    .sort((a, b) => b.values.reduce((x, y) => x + y, 0) - a.values.reduce((x, y) => x + y, 0))
+  const sub = { '7D': 'By day, last 7 days', '30D': 'Every 3 days, last 30 days', '3M': 'By week, last 3 months', '6M': 'By week, last 6 months', '1Y': 'By month, last year' }[range]
+  return { series, labels: buckets.map((b) => b.label), sub }
 }
 
 function rangeLabel(r: Range): string {
@@ -119,7 +176,7 @@ function StatCard({ label, value, tone, signed, delay }: { label: string; value:
   return (
     <motion.div className={`stat-card card tone-${tone}`} initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay, duration: 0.4 }}>
       <span className="eyebrow">{label}</span>
-      <Amount className="display-num stat-num" value={value} signed={signed} ariaLabel={label} />
+      <Amount count className="display-num stat-num" value={value} signed={signed} ariaLabel={label} />
     </motion.div>
   )
 }
@@ -139,52 +196,6 @@ function ChartCard({ title, sub, children, wide }: { title: string; sub: string;
       </div>
       {children}
     </motion.section>
-  )
-}
-
-/* ---------- Bar chart ---------- */
-
-function BarChart({ points, color }: { points: { label: string; value: number; tip: string }[]; color: string }) {
-  const { fmt } = usePrivacyText()
-  const [hover, setHover] = useState<number | null>(null)
-  const max = Math.max(1, ...points.map((p) => p.value))
-  const labelEvery = points.length > 10 ? Math.ceil(points.length / 8) : 1
-
-  return (
-    <div className="barchart">
-      <div className="bar-rows">
-        {points.map((p, i) => (
-          <div
-            key={i}
-            className={`bar-col ${hover === i ? 'hover' : ''}`}
-            onMouseEnter={() => setHover(i)}
-            onMouseLeave={() => setHover(null)}
-            onTouchStart={() => setHover(hover === i ? null : i)}
-          >
-            {hover === i && (
-              <div className="bar-tip" role="status">
-                <span className="faint">{p.tip}</span>
-                <span>{fmt(p.value)}</span>
-              </div>
-            )}
-            <motion.div
-              className="bar-fill"
-              // Navy bars; only the biggest day takes the accent colour.
-              style={{ background: p.value === 0 ? 'var(--bg-dim)' : p.value === max ? color : 'var(--text)' }}
-              initial={{ height: 0 }}
-              whileInView={{ height: `${Math.max(p.value === 0 ? 3 : 6, (p.value / max) * 100)}%` }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.55, delay: Math.min(i * 0.015, 0.4), ease: [0.16, 1, 0.3, 1] }}
-            />
-          </div>
-        ))}
-      </div>
-      <div className="bar-labels">
-        {points.map((p, i) => (
-          <span key={i} className="bar-label faint">{i % labelEvery === 0 ? p.label : ''}</span>
-        ))}
-      </div>
-    </div>
   )
 }
 
@@ -242,99 +253,3 @@ function Donut({ data, total }: { data: { def: (typeof CATEGORIES)[number]; val:
   )
 }
 
-/* ---------- Income vs expense compare ---------- */
-
-function CompareChart({ income, expense }: { income: number; expense: number }) {
-  const { fmt } = usePrivacyText()
-  const max = Math.max(1, income, expense)
-  const bars = [
-    { label: 'Income', value: income, color: 'var(--green)' },
-    { label: 'Expenses', value: expense, color: 'var(--red)' },
-  ]
-  return (
-    <div className="compare">
-      {bars.map((b, i) => (
-        <div key={b.label} className="compare-col">
-          <span className="compare-amt display-num">
-            {fmt(b.value, { compact: b.value >= 100_000_00 })}
-          </span>
-          <div className="compare-track">
-            <motion.div
-              className="compare-fill"
-              style={{ background: b.color }}
-              initial={{ height: 0 }}
-              whileInView={{ height: `${Math.max(4, (b.value / max) * 100)}%` }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.7, delay: i * 0.12, ease: [0.16, 1, 0.3, 1] }}
-            />
-          </div>
-          <span className="faint compare-label">{b.label}</span>
-        </div>
-      ))}
-    </div>
-  )
-}
-
-/* ---------- Savings trend line ---------- */
-
-function LineChart({ points }: { points: { label: string; value: number }[] }) {
-  const { fmt } = usePrivacyText()
-  const [hover, setHover] = useState<number | null>(null)
-  const W = 560
-  const H = 160
-  const PAD = 8
-  const vals = points.map((p) => p.value)
-  const max = Math.max(1, ...vals)
-  const min = Math.min(0, ...vals)
-  const span = max - min || 1
-  const x = (i: number) => PAD + (i * (W - PAD * 2)) / Math.max(1, points.length - 1)
-  const y = (v: number) => PAD + (1 - (v - min) / span) * (H - PAD * 2)
-  const path = points.map((p, i) => `${i === 0 ? 'M' : 'L'}${x(i)},${y(p.value)}`).join(' ')
-  const area = `${path} L${x(points.length - 1)},${H} L${x(0)},${H} Z`
-  const zeroY = y(0)
-
-  return (
-    <div className="linechart">
-      <svg viewBox={`0 0 ${W} ${H}`} className="line-svg" role="img" aria-label="Monthly savings trend">
-        <defs>
-          <linearGradient id="lc-fill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="var(--blue-strong)" stopOpacity="0.28" />
-            <stop offset="100%" stopColor="var(--blue-strong)" stopOpacity="0" />
-          </linearGradient>
-        </defs>
-        <line x1={PAD} x2={W - PAD} y1={zeroY} y2={zeroY} stroke="var(--border-strong)" strokeDasharray="4 5" strokeWidth="1" />
-        <motion.path d={area} fill="url(#lc-fill)" initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true }} transition={{ duration: 0.9, delay: 0.25 }} />
-        <motion.path
-          d={path} fill="none" stroke="var(--blue-strong)" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"
-          initial={{ pathLength: 0 }}
-          whileInView={{ pathLength: 1 }}
-          viewport={{ once: true }}
-          transition={{ duration: 1, ease: [0.16, 1, 0.3, 1] }}
-        />
-        {points.map((p, i) => (
-          <g key={i}>
-            <circle
-              cx={x(i)} cy={y(p.value)} r={hover === i ? 5.5 : 3.5}
-              fill={p.value >= 0 ? 'var(--blue-strong)' : 'var(--red)'}
-              stroke="var(--surface)" strokeWidth="2"
-              style={{ transition: 'r 0.15s' }}
-            />
-            <rect
-              x={x(i) - 18} y={0} width={36} height={H} fill="transparent"
-              onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover(null)}
-            />
-          </g>
-        ))}
-      </svg>
-      <div className="line-x">
-        {points.map((p, i) => <span key={i} className="faint">{p.label}</span>)}
-      </div>
-      {hover !== null && (
-        <div className="bar-tip line-tip" role="status">
-          <span className="faint">{points[hover].label}</span>
-          <span>{fmt(points[hover].value, { signed: true })}</span>
-        </div>
-      )}
-    </div>
-  )
-}

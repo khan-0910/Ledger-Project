@@ -1,1224 +1,780 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react'
+/**
+ * Ledger homepage — Harbour theme.
+ *
+ * Navy water, sand-cream cards that warm into coral, one coral accent.
+ * Motion: Lenis smooths the window; GSAP + ScrollTrigger drive the pinned phone
+ * (its own screen scrolls while insight cards surface around it), the fanned cards,
+ * the scroll-filled statement, the jar split and the velocity marquee.
+ * Under prefers-reduced-motion every section renders as a calm static page.
+ */
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import {
-  AnimatePresence,
-  MotionConfig,
-  motion,
-  useAnimationFrame,
-  useInView,
-  useMotionValue,
-  useReducedMotion,
-  useScroll,
-  useSpring,
-  useTransform,
-  useVelocity,
-  type MotionValue,
-} from 'framer-motion'
+import { gsap } from 'gsap'
+import { ScrollTrigger } from 'gsap/ScrollTrigger'
+import { SplitText } from 'gsap/SplitText'
+import { useGSAP } from '@gsap/react'
 import { useApp } from '../lib/store'
 import { useCountUp } from '../components/Amount'
 import { formatINR } from '../lib/money'
 import LedgerLogo from '../components/Logo'
-import {
-  ArrowRight,
-  Calendar,
-  Download,
-  Eye,
-  EyeOff,
-  Filter,
-  Pencil,
-  Pie,
-  Repeat,
-  Search,
-  Shield,
-  Sparkle,
-  Target,
-  Upload,
-} from '../components/Icons'
 import { useSmoothScroll } from '../lib/motion'
+import { TideChart, StreamChart, smoothPath, type StreamSeries } from '../components/charts/Flow'
 import '../landing.css'
 
-/* Fictional demo numbers — minor units, clearly labelled as demo. */
-const DEMO = {
-  total: 24680_00,
-  savings: 10000_00,
-  guiltFree: 5500_00,
-  safe: 287_00,
-}
+gsap.registerPlugin(ScrollTrigger, SplitText, useGSAP)
 
-const EXPO = [0.16, 1, 0.3, 1] as const
+const MOTION = '(prefers-reduced-motion: no-preference)'
+const DESK = '(min-width: 861px)'
+const rs = (n: number) => formatINR(n * 100)
 
 /* ============================================================
-   Shared hooks
+   Sample data (illustration only — the real app uses yours)
    ============================================================ */
 
-/** Below this width the pinned scenes become plain stacked layouts. */
-function useIsNarrow(): boolean {
-  const [narrow, setNarrow] = useState(
-    () => typeof window !== 'undefined' && window.matchMedia('(max-width: 920px)').matches,
-  )
-  useEffect(() => {
-    const mq = window.matchMedia('(max-width: 920px)')
-    const onChange = () => setNarrow(mq.matches)
-    onChange()
-    mq.addEventListener('change', onChange)
-    return () => mq.removeEventListener('change', onChange)
-  }, [])
-  return narrow
-}
+const TIDE_NOW = [0, 120, 260, 260, 540, 610, 980, 1060, 1180, 1610, 1690].map((v) => v * 100)
+const TIDE_PREV = [0, 90, 310, 420, 520, 700, 760, 1100, 1240, 1300, 1460, 1720, 1810, 1990, 2050, 2290, 2380, 2400, 2610, 2770, 2830, 3050, 3120, 3190, 3420, 3480, 3610, 3700, 3790, 3920].map((v) => v * 100)
 
-const wrap = (min: number, max: number, v: number) => {
-  const r = max - min
-  return ((((v - min) % r) + r) % r) + min
-}
+const STREAM_LABELS = ['15 Oct', '18 Oct', '21 Oct', '24 Oct', '27 Oct', '30 Oct', '2 Nov', '5 Nov', '8 Nov', '11 Nov']
+const STREAM: StreamSeries[] = [
+  { id: 'food', label: 'Food & drinks', color: '#ff6f5e', values: [180, 240, 210, 330, 420, 160, 260, 310, 470, 380].map((v) => v * 100) },
+  { id: 'transport', label: 'Transport', color: '#d9a441', values: [90, 60, 120, 80, 150, 40, 110, 70, 130, 90].map((v) => v * 100) },
+  { id: 'fun', label: 'Entertainment', color: '#b07aa1', values: [120, 0, 60, 199, 80, 0, 150, 99, 60, 120].map((v) => v * 100) },
+  { id: 'study', label: 'Education', color: '#4f7cc4', values: [0, 120, 40, 0, 60, 220, 0, 50, 0, 70].map((v) => v * 100) },
+  { id: 'groceries', label: 'Groceries', color: '#6fae8f', values: [140, 0, 90, 60, 0, 120, 80, 0, 160, 40].map((v) => v * 100) },
+]
+
+const MERCHANTS = [
+  ['Chai + samosa', 'Metro recharge', 'Blinkit run', 'Mess lunch', 'Netflix split', 'Photocopies', 'Auto to campus', 'Cold coffee'],
+  ['Zomato order', 'Bus pass top-up', 'Reference book', 'Movie night', 'Fruits & veggies', 'Rapido ride', 'Campus café', 'Haircut'],
+  ['Spotify duet', 'Lab file printing', 'Milk & eggs', 'Laundry', 'Canteen snacks', 'Phone cable', 'Gift for friend', 'Notebooks'],
+]
 
 /* ============================================================
-   Small motion pieces
+   Shared bits
    ============================================================ */
 
-function Reveal({
-  children,
-  delay = 0,
-  className,
-  y = 48,
-}: {
-  children: React.ReactNode
-  delay?: number
-  className?: string
-  y?: number
-}) {
-  return (
-    <motion.div
-      className={className}
-      initial={{ opacity: 0, y }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true, amount: 0.25 }}
-      transition={{ duration: 0.8, delay, ease: EXPO }}
-    >
-      {children}
-    </motion.div>
-  )
+function useLive(root: React.RefObject<HTMLElement | null>, cls: string, setup: (q: (s: string) => HTMLElement[], desk: boolean) => void, deps: unknown[] = []) {
+  useGSAP(() => {
+    const mm = gsap.matchMedia()
+    mm.add({ desk: DESK, motion: MOTION }, (c) => {
+      const { desk, motion } = c.conditions as { desk: boolean; motion: boolean }
+      const el = root.current
+      if (!motion || !el) return
+      el.classList.add(cls)
+      setup(gsap.utils.selector(el) as (s: string) => HTMLElement[], desk)
+      return () => el.classList.remove(cls)
+    })
+    return () => mm.revert()
+  }, { scope: root, dependencies: deps })
 }
 
-/** Masked per-letter rise. Screen readers get the plain text. */
-function SplitLine({ text, delay = 0, className }: { text: string; delay?: number; className?: string }) {
-  const words = text.split(' ')
-  let n = 0
-  return (
-    <span className={`split ${className ?? ''}`} aria-hidden="true">
-      {words.map((w, wi) => (
-        <span className="split-word" key={wi}>
-          {[...w].map((ch, ci) => {
-            const i = n++
-            return (
-              <span className="split-mask" key={ci}>
-                <motion.span
-                  className="split-ch"
-                  initial={{ y: '110%', rotate: 8 }}
-                  animate={{ y: '0%', rotate: 0 }}
-                  transition={{ duration: 0.9, delay: delay + i * 0.028, ease: EXPO }}
-                >
-                  {ch}
-                </motion.span>
-              </span>
-            )
-          })}
-          {wi < words.length - 1 && ' '}
-        </span>
-      ))}
-    </span>
-  )
-}
-
-/** Button that leans toward the pointer. */
-function Magnetic({ children, strength = 0.35 }: { children: React.ReactNode; strength?: number }) {
-  const ref = useRef<HTMLSpanElement | null>(null)
-  const x = useSpring(0, { stiffness: 260, damping: 18 })
-  const y = useSpring(0, { stiffness: 260, damping: 18 })
-  return (
-    <motion.span
-      ref={ref}
-      className="magnetic"
-      style={{ x, y }}
-      onPointerMove={(e) => {
-        if (e.pointerType !== 'mouse' || !ref.current) return
-        const r = ref.current.getBoundingClientRect()
-        x.set((e.clientX - (r.left + r.width / 2)) * strength)
-        y.set((e.clientY - (r.top + r.height / 2)) * strength)
-      }}
-      onPointerLeave={() => {
-        x.set(0)
-        y.set(0)
-      }}
-    >
-      {children}
-    </motion.span>
-  )
-}
-
-/** Blend-mode cursor ring — fine pointers only, off under reduced motion. */
-function CursorBlob() {
-  const reduced = useReducedMotion()
-  const [enabled, setEnabled] = useState(false)
-  const [hot, setHot] = useState(false)
-  const x = useMotionValue(-100)
-  const y = useMotionValue(-100)
-  const sx = useSpring(x, { stiffness: 500, damping: 40 })
-  const sy = useSpring(y, { stiffness: 500, damping: 40 })
-
-  useEffect(() => {
-    if (reduced || !window.matchMedia('(pointer: fine)').matches) return
-    setEnabled(true)
-    const move = (e: PointerEvent) => {
-      x.set(e.clientX)
-      y.set(e.clientY)
-      const t = e.target as HTMLElement | null
-      setHot(Boolean(t?.closest('a, button, input')))
-    }
-    window.addEventListener('pointermove', move, { passive: true })
-    return () => window.removeEventListener('pointermove', move)
-  }, [reduced, x, y])
-
-  if (!enabled) return null
-  return (
-    <motion.div
-      className="cursor-blob"
-      aria-hidden="true"
-      style={{ x: sx, y: sy }}
-      animate={{ scale: hot ? 3 : 1, opacity: hot ? 0.35 : 1 }}
-      transition={{ type: 'spring', stiffness: 300, damping: 22 }}
-    />
-  )
-}
-
-/* ============================================================
-   NAV — floating pill; flips surface by the band beneath it
-   ============================================================ */
-
-function Nav({ onDemo }: { onDemo: () => void }) {
-  const navRef = useRef<HTMLElement | null>(null)
-  const [tone, setTone] = useState<'light' | 'dark'>('light')
-  const { scrollYProgress } = useScroll()
-  const progress = useSpring(scrollYProgress, { stiffness: 200, damping: 30 })
-
-  useEffect(() => {
-    const update = () => {
-      const nav = navRef.current
-      if (!nav) return
-      const r = nav.getBoundingClientRect()
-      const probeY = r.top + r.height / 2
-      let next: 'light' | 'dark' = 'light'
-      document.querySelectorAll<HTMLElement>('[data-nav]').forEach((sec) => {
-        const b = sec.getBoundingClientRect()
-        if (b.top <= probeY && b.bottom > probeY) next = sec.dataset.nav === 'dark' ? 'dark' : 'light'
+/** Wide two-tone headline whose words rise out of a mask when it scrolls in. */
+function Rise({ as: Tag = 'h2', className = '', children }: { as?: 'h1' | 'h2' | 'h3'; className?: string; children: ReactNode }) {
+  const ref = useRef<HTMLHeadingElement>(null)
+  useGSAP(() => {
+    const mm = gsap.matchMedia()
+    mm.add(MOTION, () => {
+      const el = ref.current
+      if (!el) return
+      const split = SplitText.create(el, { type: 'lines,words', mask: 'lines', linesClass: 'rise-line' })
+      gsap.from(split.words, {
+        yPercent: 115,
+        duration: 1.2,
+        ease: 'expo.out',
+        stagger: 0.05,
+        scrollTrigger: { trigger: el, start: 'top 86%', once: true },
       })
-      setTone(next)
-    }
-    update()
-    window.addEventListener('scroll', update, { passive: true })
-    window.addEventListener('resize', update)
-    return () => {
-      window.removeEventListener('scroll', update)
-      window.removeEventListener('resize', update)
-    }
-  }, [])
-
-  return (
-    <motion.header
-      ref={navRef}
-      className={`lx-nav ${tone === 'dark' ? 'on-dark' : 'on-light'}`}
-      initial={{ y: -90, opacity: 0 }}
-      animate={{ y: 0, opacity: 1 }}
-      transition={{ duration: 0.9, delay: 0.2, ease: EXPO }}
-    >
-      <Link to="/" className="lx-brand" aria-label="Ledger home">
-        <LedgerLogo size={30} />
-        <span>Ledger</span>
-      </Link>
-      <nav className="lx-nav-links" aria-label="Sections">
-        <a href="#model">How it works</a>
-        <a href="#features">Features</a>
-        <a href="#search">Search</a>
-        <button type="button" onClick={onDemo}>Live demo</button>
-      </nav>
-      <nav className="lx-nav-actions" aria-label="Account">
-        <Link to="/login" className="lx-btn lx-btn-ghost lx-btn-sm">Log in</Link>
-        <Link to="/signup" className="lx-btn lx-btn-solid lx-btn-sm">Get started</Link>
-      </nav>
-      <motion.span className="lx-nav-progress" style={{ scaleX: progress }} aria-hidden="true" />
-    </motion.header>
-  )
+      return () => split.revert()
+    })
+    return () => mm.revert()
+  }, { scope: ref })
+  return <Tag ref={ref} className={`lx-rise ${className}`}>{children}</Tag>
 }
 
-/* ============================================================
-   01 HERO — yellow canvas, letter rise, phone, toasts, pixel floor
-   ============================================================ */
-
-function PrivacyBalance({ dark = true }: { dark?: boolean }) {
-  const [revealed, setRevealed] = useState(false)
-  const value = useCountUp(DEMO.total, revealed, 800)
+function Phone({ children, className = '' }: { children: ReactNode; className?: string }) {
   return (
-    <div className={`pb ${dark ? 'pb-dark' : 'pb-light'}`}>
-      <div className="pb-top">
-        <span className="pb-label">Total balance</span>
-        <span className="pb-badge">Demo</span>
+    <div className={`ph ${className}`}>
+      <div className="ph-screen">
+        <div className="ph-notch" />
+        {children}
       </div>
-      <div className="pb-amount" aria-live="polite">
-        {revealed ? formatINR(value) : <span className="pb-dots">₹••••••</span>}
-      </div>
-      <button
-        type="button"
-        className={`pb-toggle ${revealed ? 'on' : ''}`}
-        aria-pressed={revealed}
-        onClick={() => setRevealed((v) => !v)}
-      >
-        {revealed ? <EyeOff size={15} /> : <Eye size={15} />}
-        {revealed ? 'Hide balance' : 'Show balance'}
-      </button>
     </div>
   )
 }
 
-const TOASTS = [
-  { cls: 't-a', tone: 'pink', title: 'Rent due in 3 days', body: '₹6,500 already set aside in Protected.' },
-  { cls: 't-b', tone: 'teal', title: 'Laptop goal +₹350', body: '34% there. Two skipped trips helped.' },
-  { cls: 't-c', tone: 'ink', title: 'Chai logged · ₹20', body: 'Safe today is now ₹287.' },
-]
-
-function PixelFloor({ progress }: { progress: MotionValue<number> }) {
-  const reduced = useReducedMotion()
-  const cols = 14
-  const tiles = useMemo(() => {
-    const tones = ['ink', 'teal', 'pink', 'gap', 'gap', 'teal', 'ink', 'gap']
-    let s = 7
-    const rnd = () => ((s = (s * 9301 + 49297) % 233280) / 233280)
-    return Array.from({ length: cols * 3 }, (_, i) => ({
-      tone: tones[Math.floor(rnd() * tones.length)],
-      delay: 0.6 + (i % cols) * 0.04 + Math.floor(i / cols) * 0.12 + rnd() * 0.2,
-    }))
-  }, [])
-  const [flip, setFlip] = useState(-1)
-  useEffect(() => {
-    if (reduced) return
-    const id = window.setInterval(() => setFlip(Math.floor(Math.random() * cols * 3)), 900)
-    return () => window.clearInterval(id)
-  }, [reduced])
-  const y = useTransform(progress, [0, 1], [0, reduced ? 0 : 140])
-
+function StatusBar() {
   return (
-    <motion.div className="pixel-floor" style={{ y }} aria-hidden="true">
-      {tiles.map((t, i) => (
-        <motion.span
-          key={i}
-          className={`px px-${t.tone} ${flip === i ? 'px-flip' : ''}`}
-          initial={{ scaleY: 0 }}
-          animate={{ scaleY: 1 }}
-          transition={{ duration: 0.6, delay: t.delay, ease: EXPO }}
-        />
-      ))}
-    </motion.div>
-  )
-}
-
-function Hero({ onDemo }: { onDemo: () => void }) {
-  const reduced = useReducedMotion()
-  const ref = useRef<HTMLElement | null>(null)
-  const { scrollYProgress } = useScroll({ target: ref, offset: ['start start', 'end start'] })
-  /* Copy drifts up and fades faster than the phone, so the two separate
-     on scroll (both directions) instead of sliding over each other. */
-  const phoneY = useTransform(scrollYProgress, [0, 1], [0, reduced ? 0 : 90])
-  const phoneScale = useTransform(scrollYProgress, [0, 1], [1, reduced ? 1 : 1.08])
-  const copyY = useTransform(scrollYProgress, [0, 1], [0, reduced ? 0 : -140])
-  const copyOpacity = useTransform(scrollYProgress, [0, 0.35], [1, reduced ? 1 : 0])
-
-  /* Pointer parallax for the floating toasts. */
-  const px = useSpring(0, { stiffness: 80, damping: 20 })
-  const py = useSpring(0, { stiffness: 80, damping: 20 })
-  const tx1 = useTransform(px, (v) => v * 28)
-  const ty1 = useTransform(py, (v) => v * 22)
-  const tx2 = useTransform(px, (v) => v * -36)
-  const ty2 = useTransform(py, (v) => v * -18)
-
-  return (
-    <section
-      className="lx-hero"
-      id="top"
-      ref={ref}
-      data-nav="dark" data-flip=""
-      onPointerMove={(e) => {
-        if (reduced || e.pointerType !== 'mouse') return
-        px.set(e.clientX / window.innerWidth - 0.5)
-        py.set(e.clientY / window.innerHeight - 0.5)
-      }}
-    >
-      <motion.div className="hero-copy" style={{ y: copyY, opacity: copyOpacity }}>
-        <motion.span
-          className="lx-pill"
-          initial={{ opacity: 0, y: 16, scale: 0.9 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          transition={{ duration: 0.6, delay: 0.15, ease: EXPO }}
-        >
-          <Sparkle size={14} /> Built for Indian students
-        </motion.span>
-        <h1 className="hero-title" aria-label="Spend without the guilt.">
-          <SplitLine text="Spend without" delay={0.25} />
-          <span className="hero-line2">
-            <SplitLine text="the" delay={0.6} />{' '}
-            <span className="hero-guilt" aria-hidden="true">
-              <motion.span
-                initial={{ opacity: 0, y: 40, rotate: -6 }}
-                animate={{ opacity: 1, y: 0, rotate: -3 }}
-                transition={{ type: 'spring', stiffness: 220, damping: 14, delay: 0.85 }}
-                style={{ display: 'inline-block' }}
-              >
-                guilt.
-              </motion.span>
-              <svg className="guilt-squiggle" viewBox="0 0 300 30" preserveAspectRatio="none">
-                <motion.path
-                  d="M4 18 C 40 4, 70 28, 110 14 S 180 4, 220 18 S 280 26, 296 10"
-                  fill="none"
-                  strokeWidth="7"
-                  strokeLinecap="round"
-                  initial={{ pathLength: 0 }}
-                  animate={{ pathLength: 1 }}
-                  transition={{ duration: 1.1, delay: 1.25, ease: 'easeInOut' }}
-                />
-              </svg>
-            </span>
-          </span>
-        </h1>
-        <motion.p
-          className="hero-sub"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.8, delay: 1.0, ease: EXPO }}
-        >
-          Ledger splits every rupee into protected savings and guilt-free spending. You always know
-          what's safe to spend — and the big total stays private until you look.
-        </motion.p>
-        <motion.div
-          className="hero-ctas"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.8, delay: 1.15, ease: EXPO }}
-        >
-          <Magnetic>
-            <Link to="/app" className="lx-btn lx-btn-solid lx-btn-lg">
-              Enter your financial world <ArrowRight size={18} />
-            </Link>
-          </Magnetic>
-          <button type="button" className="lx-btn lx-btn-ghost lx-btn-lg" onClick={onDemo}>
-            Try the live demo
-          </button>
-        </motion.div>
-      </motion.div>
-
-      {/* Scroll owns the outer layer, the entrance owns the inner one — never the same y. */}
-      <motion.div className="hero-stage" style={{ y: phoneY, scale: phoneScale }}>
-      <motion.div
-        className="hero-stage-in"
-        initial={{ opacity: 0, y: 220 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 1.2, delay: 0.5, ease: EXPO }}
-      >
-        <div className="phone" aria-label="Ledger app preview with demo numbers">
-          <div className="phone-notch" />
-          <div className="phone-head">
-            <span>9:41</span>
-            <span className="phone-hi">Hey, Aarav</span>
-          </div>
-          <PrivacyBalance />
-          <div className="phone-split">
-            <div className="ps ps-teal">
-              <span>Protected</span>
-              <b>{formatINR(DEMO.savings)}</b>
-            </div>
-            <div className="ps ps-pink">
-              <span>Guilt-free</span>
-              <b>{formatINR(DEMO.guiltFree)}</b>
-            </div>
-          </div>
-          <div className="phone-safe">
-            <span>Safe to spend today</span>
-            <b>{formatINR(DEMO.safe)}</b>
-          </div>
-          <ul className="phone-list">
-            <li><span>Chai at the tapri</span><em>−₹20</em></li>
-            <li><span>Metro card top-up</span><em>−₹200</em></li>
-            <li><span>Scholarship credit</span><em className="pos">+₹8,000</em></li>
-          </ul>
-        </div>
-
-        {TOASTS.map((t, i) => (
-          <motion.div
-            key={t.cls}
-            className={`lx-toast ${t.cls} lx-toast-${t.tone}`}
-            style={i === 1 ? { x: tx2, y: ty2 } : { x: tx1, y: ty1 }}
-            initial={{ opacity: 0, scale: 0.6, rotate: i % 2 ? 8 : -8 }}
-            animate={{ opacity: 1, scale: 1, rotate: i % 2 ? 3 : -3 }}
-            transition={{ type: 'spring', stiffness: 260, damping: 16, delay: 1.5 + i * 0.35 }}
-          >
-            <motion.div
-              animate={reduced ? undefined : { y: [0, -10, 0] }}
-              transition={reduced ? undefined : { duration: 3.4 + i, repeat: Infinity, ease: 'easeInOut' }}
-            >
-              <strong>{t.title}</strong>
-              <span>{t.body}</span>
-            </motion.div>
-          </motion.div>
-        ))}
-      </motion.div>
-      </motion.div>
-
-      <PixelFloor progress={scrollYProgress} />
-    </section>
-  )
-}
-
-/* ============================================================
-   02 TICKER — scroll-velocity marquee (Motion docs pattern)
-   ============================================================ */
-
-function VelocityRow({ text, baseVelocity }: { text: string; baseVelocity: number }) {
-  const reduced = useReducedMotion()
-  const baseX = useMotionValue(0)
-  const { scrollY } = useScroll()
-  const scrollVelocity = useVelocity(scrollY)
-  const smoothVelocity = useSpring(scrollVelocity, { damping: 50, stiffness: 400 })
-  const velocityFactor = useTransform(smoothVelocity, [0, 1000], [0, 5], { clamp: false })
-  const skewX = useTransform(smoothVelocity, [-2500, 2500], [reduced ? 0 : 10, reduced ? 0 : -10])
-  const x = useTransform(baseX, (v) => `${wrap(-25, 0, v)}%`)
-  const direction = useRef(1)
-
-  useAnimationFrame((_, delta) => {
-    if (reduced) return
-    let moveBy = direction.current * baseVelocity * (delta / 1000)
-    const f = velocityFactor.get()
-    if (f < 0) direction.current = -1
-    else if (f > 0) direction.current = 1
-    moveBy += direction.current * moveBy * f
-    baseX.set(baseX.get() + moveBy)
-  })
-
-  return (
-    <div className="ticker-row">
-      <motion.div className="ticker-track" style={{ x, skewX }}>
-        {[0, 1, 2, 3].map((k) => (
-          <span key={k}>{text}</span>
-        ))}
-      </motion.div>
+    <div className="ph-status">
+      <span>9:41</span>
+      <span className="ph-status-r"><i /><i /><i /></span>
     </div>
   )
 }
 
-function Ticker() {
+function Spark({ values, w = 220, h = 54 }: { values: number[]; w?: number; h?: number }) {
+  const max = Math.max(...values)
+  const pts = values.map((v, i) => [4 + (i / (values.length - 1)) * (w - 8), h - 4 - (v / max) * (h - 10)] as [number, number])
+  const line = smoothPath(pts)
   return (
-    <section className="lx-ticker" data-nav="dark" aria-label="What Ledger tells you">
-      <VelocityRow text="What you can spend ✦ What you should save ✦ What you must not touch ✦ " baseVelocity={-3} />
-      <VelocityRow text="Chai ₹20 ✦ Mess fees ₹2,400 ✦ Metro ₹200 ✦ Movie ₹260 ✦ Laptop fund +₹350 ✦ " baseVelocity={2.4} />
-    </section>
-  )
-}
-
-/* ============================================================
-   03 MONEY STORY — pinned, scroll-linked (kept from v1, rebuilt)
-   ============================================================ */
-
-type Beat = { step: string; label: string; text: string }
-
-const STORY_BEATS: Beat[] = [
-  { step: '01', label: 'Total balance', text: 'Everything in the account is one number — ₹24,680 all in. It counts up with your scroll.' },
-  { step: '02', label: 'Protected first', text: '₹10,000 is locked away before anything else — rent, fees, the minimum balance. Off limits.' },
-  { step: '03', label: 'Guilt-free', text: '₹5,500 is yours to enjoy — chai, movies, late-night maggi. Spend it without the maths.' },
-  { step: '04', label: 'Safe today', text: 'After today’s plans, ₹287 is the number you check before you say yes.' },
-]
-
-const beatWindow = (i: number): [number, number, number, number] => [
-  i * 0.25 - 0.06,
-  i * 0.25 + 0.02,
-  i * 0.25 + 0.22,
-  i * 0.25 + 0.28,
-]
-const beatOpacity = (i: number) =>
-  i === 0 ? [1, 1, 1, 0] : i === STORY_BEATS.length - 1 ? [0, 1, 1, 1] : [0, 1, 1, 0]
-
-function StoryCaption({ progress, index, beat }: { progress: MotionValue<number>; index: number; beat: Beat }) {
-  const [a, b, c, d] = beatWindow(index)
-  const opacity = useTransform(progress, [a, b, c, d], beatOpacity(index))
-  const y = useTransform(progress, [a, b, c, d], index === 0 ? [0, 0, 0, -40] : [60, 0, 0, -40])
-  return (
-    <motion.div className="ms-caption" style={{ opacity, y }}>
-      <span className="ms-step">{beat.step}</span>
-      <h3>{beat.label}</h3>
-      <p>{beat.text}</p>
-    </motion.div>
-  )
-}
-
-function StoryTick({ progress, index }: { progress: MotionValue<number>; index: number }) {
-  const [a, b] = beatWindow(index)
-  const fill = useTransform(progress, [Math.max(0, a), b + 0.2], [0, 1])
-  return (
-    <span className="ms-tick">
-      <motion.i style={{ scaleX: fill }} />
-    </span>
-  )
-}
-
-function StoryPill({ progress, index, label, tone }: { progress: MotionValue<number>; index: number; label: string; tone: string }) {
-  const [a, b, c, d] = beatWindow(index)
-  const opacity = useTransform(progress, [a, b, c, d], beatOpacity(index))
-  const scale = useTransform(progress, [a, b], index === 0 ? [1, 1] : [0.7, 1])
-  return (
-    <motion.span className={`ms-pill ms-pill-${tone}`} style={{ opacity, scale }}>
-      {label}
-    </motion.span>
-  )
-}
-
-function StoryStage({ progress }: { progress: MotionValue<number> }) {
-  const headlineRaw = useTransform(
-    progress,
-    [0, 0.15, 0.22, 0.3, 0.47, 0.55, 0.72, 0.8, 1],
-    [0, DEMO.total, DEMO.total, DEMO.savings, DEMO.savings, DEMO.guiltFree, DEMO.guiltFree, DEMO.safe, DEMO.safe],
-  )
-  const headline = useTransform(headlineRaw, (v) => formatINR(Math.round(v)))
-
-  /* Ring arcs: total draws, then protected + guilt-free carve it up. */
-  const totalLen = useTransform(progress, [0, 0.15], [0, 1])
-  const totalOpacity = useTransform(progress, [0.2, 0.3], [1, 0.14])
-  const protLen = useTransform(progress, [0.22, 0.34], [0, 0.41])
-  const guiltLen = useTransform(progress, [0.47, 0.58, 0.72, 0.84], [0, 0.22, 0.22, 0.012])
-  const ringRotate = useTransform(progress, [0, 1], [-90, 270])
-  const stageScale = useTransform(progress, [0, 0.08, 0.92, 1], [0.86, 1, 1, 0.96])
-
-  return (
-    <motion.div className="ms-stage" style={{ scale: stageScale }} aria-label="Ledger money model, advancing as you scroll">
-      <div className="ms-ring-wrap">
-        <motion.svg className="ms-ring" viewBox="0 0 300 300" style={{ rotate: ringRotate }}>
-          <circle cx="150" cy="150" r="124" className="ring-bg" />
-          <motion.circle cx="150" cy="150" r="124" className="ring-total" style={{ pathLength: totalLen, opacity: totalOpacity }} />
-          <motion.circle cx="150" cy="150" r="124" className="ring-prot" style={{ pathLength: protLen }} />
-          <motion.circle cx="150" cy="150" r="124" className="ring-guilt" style={{ pathLength: guiltLen, pathOffset: 0.42 }} />
-        </motion.svg>
-        <div className="ms-center">
-          <div className="ms-pills">
-            <StoryPill progress={progress} index={0} label="Total balance" tone="ink" />
-            <StoryPill progress={progress} index={1} label="Protected" tone="teal" />
-            <StoryPill progress={progress} index={2} label="Guilt-free" tone="pink" />
-            <StoryPill progress={progress} index={3} label="Safe today" tone="ink" />
-          </div>
-          <motion.div className="ms-number">{headline}</motion.div>
-          <span className="ms-demo">Demo numbers</span>
-        </div>
-      </div>
-      <div className="ms-legend">
-        <span><i className="lg-teal" />Protected</span>
-        <span><i className="lg-pink" />Guilt-free</span>
-        <span><i className="lg-rest" />Everything else</span>
-      </div>
-    </motion.div>
-  )
-}
-
-function StaticMoneyStory() {
-  return (
-    <div className="ms-static">
-      {STORY_BEATS.map((beat) => (
-        <div className="ms-static-card" key={beat.step}>
-          <span className="ms-step">{beat.step}</span>
-          <h3>{beat.label}</h3>
-          <p>{beat.text}</p>
-        </div>
-      ))}
-    </div>
-  )
-}
-
-function MoneyStory() {
-  const reduced = useReducedMotion()
-  const narrow = useIsNarrow()
-  const staticMode = Boolean(reduced) || narrow
-  const sectionRef = useRef<HTMLElement | null>(null)
-  const { scrollYProgress } = useScroll({ target: sectionRef, offset: ['start start', 'end end'] })
-  const visualProgress = useTransform(scrollYProgress, [0, 1], [0, 1])
-  const bigX = useTransform(visualProgress, [0, 1], ['10%', '-60%'])
-
-  if (staticMode) {
-    return (
-      <section className="lx-story lx-story--static" id="model" data-nav="dark">
-        <div className="lx-wrap">
-          <span className="lx-kicker k-yellow">How the money works</span>
-          <h2 className="lx-title">One balance. Four beats.</h2>
-          <StaticMoneyStory />
-        </div>
-      </section>
-    )
-  }
-
-  return (
-    <section className="lx-story" id="model" ref={sectionRef} data-nav="dark">
-      <div className="ms-sticky">
-        <motion.div className="ms-bigword" style={{ x: bigX }} aria-hidden="true">
-          total → protected → guilt-free → safe
-        </motion.div>
-        <div className="lx-wrap ms-grid">
-          <div className="ms-copy">
-            <span className="lx-kicker k-yellow">How the money works</span>
-            <div className="ms-captions">
-              {STORY_BEATS.map((beat, i) => (
-                <StoryCaption key={beat.step} progress={visualProgress} index={i} beat={beat} />
-              ))}
-            </div>
-            <div className="ms-ticks" aria-hidden="true">
-              {STORY_BEATS.map((_, i) => (
-                <StoryTick key={i} progress={visualProgress} index={i} />
-              ))}
-            </div>
-          </div>
-          <StoryStage progress={visualProgress} />
-        </div>
-      </div>
-    </section>
-  )
-}
-
-/* ============================================================
-   04 BENTO — "All in one place": cards converge on scroll
-   ============================================================ */
-
-function ScatterCard({
-  progress,
-  from,
-  className,
-  children,
-}: {
-  progress: MotionValue<number>
-  from: { x: number; y: number; r: number }
-  className: string
-  children: React.ReactNode
-}) {
-  const reduced = useReducedMotion()
-  const k = reduced ? 0 : 1
-  const x = useTransform(progress, [0, 1], [from.x * k, 0])
-  const y = useTransform(progress, [0, 1], [from.y * k, 0])
-  const rotate = useTransform(progress, [0, 1], [from.r * k, 0])
-  const opacity = useTransform(progress, [0, 0.35], [reduced ? 1 : 0, 1])
-  return (
-    <motion.article
-      className={`bento-card ${className}`}
-      style={{ x, y, rotate, opacity }}
-    >
-      {children}
-    </motion.article>
-  )
-}
-
-function BudgetBars() {
-  const ref = useRef<HTMLDivElement | null>(null)
-  const inView = useInView(ref, { once: true, amount: 0.5 })
-  const rows = [
-    { k: 'Food', used: 72 },
-    { k: 'Travel', used: 45 },
-    { k: 'Fun', used: 88 },
-  ]
-  return (
-    <div className="bb" ref={ref}>
-      {rows.map((r, i) => (
-        <div className="bb-row" key={r.k}>
-          <span>{r.k}</span>
-          <div className="bb-track">
-            <motion.i
-              initial={{ width: 0 }}
-              animate={{ width: inView ? `${r.used}%` : 0 }}
-              transition={{ duration: 1.1, delay: 0.2 + i * 0.15, ease: EXPO }}
-            />
-          </div>
-          <em>{100 - r.used}% left</em>
-        </div>
-      ))}
-    </div>
-  )
-}
-
-function GoalRing() {
-  const ref = useRef<SVGSVGElement | null>(null)
-  const inView = useInView(ref, { once: true, amount: 0.6 })
-  return (
-    <svg ref={ref} className="goal-ring" viewBox="0 0 120 120" aria-hidden="true">
-      <circle cx="60" cy="60" r="48" className="gr-bg" />
-      <motion.circle
-        cx="60"
-        cy="60"
-        r="48"
-        className="gr-fg"
-        initial={{ pathLength: 0 }}
-        animate={{ pathLength: inView ? 0.34 : 0 }}
-        transition={{ duration: 1.4, ease: EXPO, delay: 0.2 }}
-      />
-      <text x="60" y="66" textAnchor="middle">34%</text>
+    <svg width="100%" viewBox={`0 0 ${w} ${h}`} className="spark" aria-hidden="true">
+      <path d={`${line} L${pts[pts.length - 1][0]},${h} L${pts[0][0]},${h} Z`} className="spark-fill" />
+      <path d={line} className="spark-line" />
+      <circle cx={pts[pts.length - 1][0]} cy={pts[pts.length - 1][1]} r="4" className="spark-buoy" />
     </svg>
   )
 }
 
-function Bento() {
-  const ref = useRef<HTMLElement | null>(null)
-  const { scrollYProgress } = useScroll({ target: ref, offset: ['start end', 'start 0.45'] })
-  const p = useSpring(scrollYProgress, { stiffness: 120, damping: 26 })
-  const narrow = useIsNarrow()
-  const m = narrow ? 0.35 : 1
-
+/** The app's dashboard, in miniature, long enough to scroll inside the phone. */
+function PhoneDash() {
   return (
-    <section className="lx-bento" id="features" ref={ref} data-nav="dark" data-flip="">
-      <div className="lx-wrap">
-        <Reveal className="lx-head">
-          <span className="lx-kicker k-ink">All in one place</span>
-          <h2 className="lx-title">
-            Many rupees. <span className="serif-it">One calm view.</span>
-          </h2>
-          <p className="lx-lede">Every rupee lands in a bucket. Ledger keeps the buckets honest, so you don't have to.</p>
-        </Reveal>
-
-        <div className="bento-grid">
-          <ScatterCard progress={p} from={{ x: -420 * m, y: 160, r: -14 }} className="b-privacy c-ink">
-            <span className="b-ic"><Shield size={20} /></span>
-            <h3>Private by default</h3>
-            <p>The big total stays masked. One tap to peek — nothing else is hidden.</p>
-            <PrivacyBalance dark={false} />
-          </ScatterCard>
-          <ScatterCard progress={p} from={{ x: 260 * m, y: 220, r: 12 }} className="b-budget c-yellow">
-            <span className="b-ic"><Pie size={20} /></span>
-            <h3>Budgets that breathe</h3>
-            <BudgetBars />
-          </ScatterCard>
-          <ScatterCard progress={p} from={{ x: 480 * m, y: -60, r: 18 }} className="b-safe c-pink">
-            <span className="b-small">Safe to spend · live</span>
-            <div className="b-huge">₹287</div>
-            <p>Updates the second you log a spend.</p>
-          </ScatterCard>
-          <ScatterCard progress={p} from={{ x: -300 * m, y: 280, r: 10 }} className="b-recur c-teal">
-            <span className="b-ic"><Repeat size={20} /></span>
-            <h3>Recurring, remembered</h3>
-            <ul className="recur-list">
-              <li><span>Hostel rent</span><em>in 3 days</em></li>
-              <li><span>Wi-Fi</span><em>in 9 days</em></li>
-              <li><span>Music app</span><em>on the 21st</em></li>
-            </ul>
-          </ScatterCard>
-          <ScatterCard progress={p} from={{ x: 120 * m, y: 340, r: -16 }} className="b-goal c-ink">
-            <span className="b-ic"><Target size={20} /></span>
-            <h3>Goals that grow</h3>
-            <div className="goal-row">
-              <GoalRing />
-              <p>First laptop<br /><b>₹8,400</b> of ₹25,000</p>
-            </div>
-          </ScatterCard>
-          <ScatterCard progress={p} from={{ x: 360 * m, y: 300, r: -8 }} className="b-csv c-yellow">
-            <span className="b-ic"><Upload size={20} /></span>
-            <h3>Bring your statement</h3>
-            <p>Import a CSV, export one back. Your data stays yours.</p>
-          </ScatterCard>
-        </div>
+    <div className="ph-scroll">
+      <StatusBar />
+      <p className="pd-kicker">Tue, 11 Nov · 19 days left</p>
+      <p className="pd-hi">Good evening, Aarav</p>
+      <div className="pd-card pd-hero">
+        <span className="pd-label">Total balance</span>
+        <b className="pd-big">₹24,850</b>
+        <span className="pd-split"><i style={{ width: '40%' }} /><i style={{ width: '13%' }} /></span>
+        <span className="pd-legend">Savings 40% · Guilt-free 13%</span>
       </div>
-    </section>
-  )
-}
-
-/* ============================================================
-   05 SEARCH — "Search anything. Summarise everything."
-   ============================================================ */
-
-type DemoTxn = { name: string; cat: string; amt: number; when: string }
-const SEARCH_TXNS: DemoTxn[] = [
-  { name: 'Chai at the tapri', cat: 'Food', amt: 20, when: 'Today' },
-  { name: 'Chai + bun maska', cat: 'Food', amt: 45, when: 'Yesterday' },
-  { name: 'Chai with the gang', cat: 'Food', amt: 120, when: 'Mon' },
-  { name: 'Chai at the library', cat: 'Food', amt: 15, when: 'Last week' },
-  { name: 'Swiggy · biryani', cat: 'Food', amt: 289, when: 'Sat' },
-  { name: 'Swiggy · late-night maggi', cat: 'Food', amt: 99, when: 'Thu' },
-  { name: 'Swiggy · pizza split', cat: 'Food', amt: 210, when: 'Last week' },
-  { name: 'Auto to campus', cat: 'Travel', amt: 60, when: 'Today' },
-  { name: 'Auto from station', cat: 'Travel', amt: 140, when: 'Sun' },
-  { name: 'Auto, rainy day', cat: 'Travel', amt: 90, when: 'Last week' },
-  { name: 'Metro card top-up', cat: 'Travel', amt: 200, when: 'Fri' },
-  { name: 'Movie night', cat: 'Fun', amt: 260, when: 'Fri' },
-]
-const QUERIES = ['chai', 'swiggy', 'auto']
-
-function SearchDemo() {
-  const reduced = useReducedMotion()
-  const ref = useRef<HTMLDivElement | null>(null)
-  const inView = useInView(ref, { amount: 0.4 })
-  const [query, setQuery] = useState(reduced ? 'chai' : '')
-  const [touched, setTouched] = useState(false)
-
-  /* Auto-type through example queries until the visitor types. */
-  useEffect(() => {
-    if (!inView || touched || reduced) return
-    let cancelled = false
-    let qi = 0
-    const timers: number[] = []
-    const run = () => {
-      const word = QUERIES[qi % QUERIES.length]
-      for (let i = 0; i <= word.length; i++) {
-        timers.push(window.setTimeout(() => !cancelled && setQuery(word.slice(0, i)), i * 140))
-      }
-      timers.push(window.setTimeout(() => { qi++; if (!cancelled) run() }, word.length * 140 + 2600))
-    }
-    run()
-    return () => {
-      cancelled = true
-      timers.forEach(clearTimeout)
-    }
-  }, [inView, touched, reduced])
-
-  const q = query.trim().toLowerCase()
-  const hits = q ? SEARCH_TXNS.filter((t) => t.name.toLowerCase().includes(q) || t.cat.toLowerCase().includes(q)) : []
-  const total = hits.reduce((s, t) => s + t.amt, 0)
-  const shown = useCountUp(total * 100, true, 500)
-
-  return (
-    <div className="search-box" ref={ref}>
-      <label className="search-input">
-        <Search size={20} />
-        <input
-          value={query}
-          placeholder="Try chai, swiggy, auto…"
-          aria-label="Search demo transactions"
-          onChange={(e) => {
-            setTouched(true)
-            setQuery(e.target.value)
-          }}
-        />
-        {!touched && !reduced && <span className="caret" aria-hidden="true" />}
-      </label>
-      <div className="search-sum">
-        <div>
-          <span>Matches</span>
-          <b>{hits.length}</b>
-        </div>
-        <div>
-          <span>Spent this month</span>
-          <b>{formatINR(shown)}</b>
-        </div>
-        <div>
-          <span>Average</span>
-          <b>{hits.length ? formatINR(Math.round((total / hits.length) * 100)) : '—'}</b>
-        </div>
+      <div className="pd-two">
+        <div className="pd-card pd-navy"><span className="pd-label">Strict savings</span><b>₹10,000</b></div>
+        <div className="pd-card pd-hot"><span className="pd-label">Guilt-free left</span><b>₹3,120</b></div>
       </div>
-      <ul className="search-results">
-        <AnimatePresence initial={false} mode="popLayout">
-          {hits.map((t, i) => (
-            <motion.li
-              key={t.name}
-              layout
-              initial={{ opacity: 0, x: -30, scale: 0.96 }}
-              animate={{ opacity: 1, x: 0, scale: 1 }}
-              exit={{ opacity: 0, x: 30, scale: 0.96 }}
-              transition={{ duration: 0.4, delay: i * 0.04, ease: EXPO }}
-            >
-              <span className={`sr-cat sr-${t.cat.toLowerCase()}`}>{t.cat}</span>
-              <span className="sr-name">{t.name}</span>
-              <span className="sr-when">{t.when}</span>
-              <em>−₹{t.amt}</em>
-            </motion.li>
-          ))}
-        </AnimatePresence>
-        {!hits.length && <li className="sr-empty">Nothing yet — type to search the demo list.</li>}
-      </ul>
-    </div>
-  )
-}
-
-function SearchSection() {
-  return (
-    <section className="lx-search" id="search" data-nav="dark" data-flip="">
-      <div className="lx-wrap search-grid">
-        <Reveal className="lx-head lx-head-left">
-          <span className="lx-kicker k-ink">Search &amp; filter</span>
-          <h2 className="lx-title">
-            Search anything. <span className="serif-it">Sum up everything.</span>
-          </h2>
-          <p className="lx-lede">
-            Type “chai” and see every cup — how many, how much, and the average. It's a little
-            scary. It's very useful.
-          </p>
-        </Reveal>
-        <Reveal delay={0.12}>
-          <SearchDemo />
-        </Reveal>
+      <div className="pd-card">
+        <span className="pd-label">This month so far</span>
+        <b className="pd-mid">₹1,610</b>
+        <Spark values={[0, 120, 260, 260, 540, 610, 980, 1060, 1180, 1610]} />
       </div>
-    </section>
-  )
-}
-
-/* ============================================================
-   06 HORIZONTAL — Log / Budget / Recur / Reflect, pinned sideways
-   ============================================================ */
-
-const STEPS = [
-  { n: '01', k: 'Log', t: 'Two taps, one spend.', d: 'Amount, category, done. Add a note if future-you will ask “what was that?”', tone: 'yellow' },
-  { n: '02', k: 'Budget', t: 'See what’s left.', d: 'Each category shows what remains this month — the moment you log.', tone: 'pink' },
-  { n: '03', k: 'Recur', t: 'No more surprise bills.', d: 'Rent, Wi-Fi, subscriptions — logged on schedule, flagged before they bite.', tone: 'aqua' },
-  { n: '04', k: 'Reflect', t: 'Learn from last month.', d: 'Insights spot where the money went, so next month goes better.', tone: 'blush' },
-] as const
-
-function StepVisual({ index }: { index: number }) {
-  const ref = useRef<HTMLDivElement | null>(null)
-  const inView = useInView(ref, { amount: 0.4 })
-  if (index === 0) {
-    return (
-      <div className="sv sv-log" ref={ref}>
-        <div className="sv-amt">₹<motion.span animate={{ opacity: inView ? 1 : 0.2 }}>60</motion.span></div>
-        <div className="sv-chips">
-          {['Food', 'Travel', 'Fun', 'Books'].map((c, i) => (
-            <motion.span
-              key={c}
-              className={i === 1 ? 'on' : ''}
-              initial={{ y: 30, opacity: 0 }}
-              animate={inView ? { y: 0, opacity: 1 } : { y: 30, opacity: 0 }}
-              transition={{ delay: 0.1 + i * 0.08, type: 'spring', stiffness: 300, damping: 18 }}
-            >
-              {c}
-            </motion.span>
-          ))}
-        </div>
-        <div className="sv-note"><Pencil size={14} /> Auto to campus, running late</div>
+      <div className="pd-card">
+        <span className="pd-label">Safe to spend today</span>
+        <b className="pd-big">₹156</b>
+        <span className="pd-note">Guilt-free left, split over 19 days</span>
       </div>
-    )
-  }
-  if (index === 1) {
-    return (
-      <div className="sv sv-budget" ref={ref}>
-        {[['Food', 0.72], ['Travel', 0.45], ['Fun', 0.88], ['Books', 0.2]].map(([k, v], i) => (
-          <div className="svb" key={k as string}>
-            <span>{k}</span>
-            <div><motion.i animate={{ scaleX: inView ? (v as number) : 0 }} transition={{ duration: 1, delay: i * 0.1, ease: EXPO }} /></div>
+      <div className="pd-card">
+        <span className="pd-label">Where it went</span>
+        {[['Food & drinks', 39, '#ff6f5e'], ['Shopping', 26, '#e8908a'], ['Transport', 19, '#d9a441'], ['Entertainment', 16, '#b07aa1']].map(([l, p, c]) => (
+          <div className="pd-rank" key={l as string}>
+            <span><i style={{ background: c as string }} />{l}</span><em>{p}%</em>
+            <span className="pd-track"><span style={{ width: `${(p as number) * 2.4}%` }} /></span>
           </div>
         ))}
       </div>
-    )
-  }
-  if (index === 2) {
-    return (
-      <div className="sv sv-cal" ref={ref}>
-        {Array.from({ length: 28 }, (_, i) => {
-          const due = [2, 9, 20].includes(i)
-          return (
-            <motion.span
-              key={i}
-              className={due ? 'due' : ''}
-              animate={inView ? { scale: 1, opacity: 1 } : { scale: 0.4, opacity: 0 }}
-              transition={{ delay: i * 0.015, type: 'spring', stiffness: 400, damping: 20 }}
-            >
-              {i + 1}
-            </motion.span>
-          )
-        })}
+      <div className="pd-card">
+        <span className="pd-label">Recurring</span>
+        {[['Netflix split', 'Tomorrow', 199], ['Spotify duet', '14 Nov', 149], ['Hostel rent', '1 Dec', 6500]].map(([n, d, a]) => (
+          <div className="pd-row" key={n as string}><span>{n}<em>{d}</em></span><b>{rs(a as number)}</b></div>
+        ))}
       </div>
-    )
-  }
-  return (
-    <div className="sv sv-bars" ref={ref}>
-      {[40, 70, 55, 90, 35, 60, 48].map((h, i) => (
-        <motion.i
-          key={i}
-          animate={{ scaleY: inView ? h / 100 : 0.05 }}
-          transition={{ duration: 0.9, delay: i * 0.06, ease: EXPO }}
-        />
-      ))}
-      <span className="sv-insight"><Sparkle size={14} /> Food is up 18% vs last month</span>
+      <div className="pd-card">
+        <span className="pd-label">Laptop fund</span>
+        <b className="pd-mid">₹18,000 <em>of ₹45,000</em></b>
+        <span className="pd-bar"><span style={{ width: '40%' }} /></span>
+      </div>
     </div>
   )
 }
 
-function StepPanel({ s, i }: { s: (typeof STEPS)[number]; i: number }) {
+/* ============================================================
+   NAV
+   ============================================================ */
+
+function Nav({ onDemo }: { onDemo: () => void }) {
+  const [state, setState] = useState({ solid: false, hidden: false })
+  useEffect(() => {
+    let last = window.scrollY
+    let hidden = false
+    const onScroll = () => {
+      const y = window.scrollY
+      if (y <= 400 || y < last - 4) hidden = false
+      else if (y > last + 4) hidden = true
+      setState({ solid: y > 24, hidden })
+      last = y
+    }
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => window.removeEventListener('scroll', onScroll)
+  }, [])
   return (
-    <article className={`hz-panel hz-${s.tone}`}>
-      <div className="hz-copy">
-        <span className="hz-n">{s.n}</span>
-        <span className="hz-k">{s.k}</span>
-        <h3>{s.t}</h3>
-        <p>{s.d}</p>
+    <header className={`lx-nav ${state.solid ? 'solid' : ''} ${state.hidden ? 'away' : ''}`}>
+      <nav className="lx-nav-l" aria-label="Sections">
+        <a href="#how">How it works</a>
+        <a href="#features">Features</a>
+        <Link to="/privacy">Privacy</Link>
+      </nav>
+      <Link to="/" className="lx-brand" aria-label="Ledger home">
+        <LedgerLogo size={28} />
+        <span>Ledger</span>
+      </Link>
+      <div className="lx-nav-r">
+        <button type="button" className="lx-link" onClick={onDemo}>Demo</button>
+        <Link to="/login" className="lx-link">Log in</Link>
+        <Link to="/signup" className="lx-btn lx-btn-coral lx-btn-sm">Get started</Link>
       </div>
-      <StepVisual index={i} />
+    </header>
+  )
+}
+
+/* ============================================================
+   HERO — headline over a rising tide of tiles; the phone peeks up,
+   then pins in the middle while its own screen scrolls.
+   ============================================================ */
+
+const TILE_COLS = 20
+const TILE_ROWS = 4
+/** Which tiles are filled, from the top row down: denser toward the bottom, like a rising tide. */
+const TILES = Array.from({ length: TILE_COLS * TILE_ROWS }, (_, i) => {
+  const r = Math.floor(i / TILE_COLS)
+  const c = i % TILE_COLS
+  const h = Math.abs(Math.sin(c * 12.9898 + r * 78.233) * 43758.5453) % 1
+  const filled = h < [0.14, 0.34, 0.62, 0.88][r]
+  const h2 = (h * 97.13) % 1
+  const tone = h2 < 0.07 ? 'coral' : h2 < 0.26 ? 'sand' : h2 < 0.64 ? 'deep' : 'mid'
+  return filled ? tone : ''
+})
+
+const TOASTS = [
+  { side: 'l', k: 'Safe to spend', t: '₹156 today', s: 'Guilt-free left, over 19 days' },
+  { side: 'r', k: 'Recurring', t: 'Netflix split tomorrow', s: '₹199 from guilt-free' },
+  { side: 'l', k: 'Budget', t: 'Food is at 82%', s: '₹270 left for November' },
+  { side: 'r', k: 'Goal', t: 'Laptop fund 40% there', s: '₹18,000 of ₹45,000' },
+]
+
+function Hero({ onDemo }: { onDemo: () => void }) {
+  const root = useRef<HTMLElement>(null)
+
+  useLive(root, 'h-live', (q, desk) => {
+    const stage = root.current!
+    const copy = q('.h-copy')[0]
+    const phone = q('.h-phone')[0]
+    const peek = () => {
+      const s = stage.getBoundingClientRect()
+      const c = copy.getBoundingClientRect()
+      const ph = phone.offsetHeight
+      const centeredTop = s.height / 2 - ph / 2
+      return Math.max(c.bottom - s.top + 40 - centeredTop, s.height * 0.3)
+    }
+    gsap.set(phone, { y: peek })
+
+    const title = q('.h-title')[0]
+    const split = SplitText.create(title, { type: 'lines,words', mask: 'lines', linesClass: 'rise-line' })
+    const intro = gsap.timeline({ defaults: { ease: 'expo.out' } })
+    intro
+      .from(q('.h-pill'), { y: 16, autoAlpha: 0, duration: 0.9 })
+      .from(split.words, { yPercent: 115, duration: 1.3, stagger: 0.07 }, 0.1)
+      .from(q('.h-sub'), { y: 20, autoAlpha: 0, duration: 1 }, 0.55)
+      .from(q('.h-ctas > *'), { y: 20, autoAlpha: 0, duration: 1, stagger: 0.08 }, 0.65)
+      .from(q('.tile.on'), { scaleY: 0, transformOrigin: '50% 100%', duration: 1, ease: 'expo.out', stagger: { each: 0.02, from: 'end', grid: [TILE_ROWS, TILE_COLS], axis: 'y' } }, 0.3)
+      .from(q('.h-phone-in'), { y: '70vh', duration: 1.8 }, 0.35)
+
+    const screen = q('.ph-scroll')[0]
+    const view = q('.h-phone .ph-screen')[0]
+    const travel = () => -(screen.scrollHeight - view.clientHeight + 24)
+    const toasts = q('.h-toast')
+
+    const tl = gsap.timeline({
+      scrollTrigger: { trigger: stage, start: 'top top', end: desk ? '+=240%' : '+=200%', pin: true, scrub: 1, invalidateOnRefresh: true },
+    })
+    tl.to(copy, { y: -140, autoAlpha: 0, duration: 0.8, ease: 'power2.in' }, 0)
+      .to(q('.tile'), { yPercent: 120, autoAlpha: 0, duration: 1, stagger: { each: 0.01, from: 'random' } }, 0)
+      .to(phone, { y: 0, duration: 1, ease: 'power2.inOut' }, 0)
+      .to(screen, { y: travel, duration: 3.4, ease: 'none' }, 1)
+    toasts.forEach((t, i) => {
+      const from = TOASTS[i].side === 'l' ? -60 : 60
+      tl.fromTo(t, { x: from, y: 24, autoAlpha: 0, rotate: from > 0 ? 3 : -3 }, { x: 0, y: 0, autoAlpha: 1, rotate: 0, duration: 0.45, ease: 'back.out(1.5)' }, 1.1 + i * 0.7)
+      if (!desk && i < toasts.length - 1) tl.to(t, { autoAlpha: 0, y: -16, duration: 0.3 }, 1.1 + i * 0.7 + 0.6)
+    })
+    tl.to({}, { duration: 0.4 })
+  })
+
+  return (
+    <section className="h-stage" ref={root} aria-label="Ledger">
+      <div className="h-copy">
+        <p className="h-pill">Free for students · no bank login</p>
+        <h1 className="h-title">Spend without <span className="coral">the guilt</span></h1>
+        <p className="h-sub">
+          Ledger splits your balance into savings you don't touch and money you can spend freely,
+          then tells you what's safe to spend today.
+        </p>
+        <div className="h-ctas">
+          <Link to="/signup" className="lx-btn lx-btn-coral">Get started</Link>
+          <button type="button" className="lx-btn lx-btn-line" onClick={onDemo}>Try the demo</button>
+        </div>
+      </div>
+
+      <div className="h-tiles" aria-hidden="true" style={{ gridTemplateColumns: `repeat(${TILE_COLS}, 1fr)` }}>
+        {TILES.map((t, i) => <span key={i} className={`tile ${t ? `on t-${t}` : ''}`} />)}
+      </div>
+
+      <div className="h-phone">
+        <div className="h-phone-in">
+          <Phone><PhoneDash /></Phone>
+          {TOASTS.map((t, i) => (
+            <div key={i} className={`h-toast side-${t.side} n${i}`} aria-hidden="true">
+              <span className="ht-k"><i />{t.k}</span>
+              <b>{t.t}</b>
+              <span className="ht-s">{t.s}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+/* ============================================================
+   FAN — three cards slide out from behind each other into a
+   tilted row (the phone's cards, up close)
+   ============================================================ */
+
+function Fan() {
+  const root = useRef<HTMLElement>(null)
+  useLive(root, 'fan-live', (q, desk) => {
+    const cards = q('.fan-card')
+    if (desk) {
+      gsap.fromTo(cards,
+        { x: (i: number) => (1 - i) * 320, y: 140, rotateY: 0, rotateZ: 0, scale: 0.82, autoAlpha: 0 },
+        {
+          x: 0, y: 0, scale: 1, autoAlpha: 1,
+          rotateY: (i: number) => [22, 0, -22][i],
+          rotateZ: (i: number) => [-2, 0, 2][i],
+          z: (i: number) => (i === 1 ? 60 : 0),
+          ease: 'none',
+          scrollTrigger: { trigger: root.current, start: 'top 85%', end: 'center 55%', scrub: 1 },
+        })
+    } else {
+      gsap.from(cards, { y: 60, autoAlpha: 0, duration: 1, ease: 'expo.out', stagger: 0.1, scrollTrigger: { trigger: root.current, start: 'top 80%', once: true } })
+    }
+  })
+  return (
+    <section className="fan" ref={root} aria-label="What Ledger shows you">
+      <div className="fan-row">
+        <article className="fan-card lx-card">
+          <span className="lc-k">Recurring</span>
+          <p className="lc-t">3 payments in the next 3 weeks</p>
+          {[['Netflix split', 'Tomorrow', 199], ['Spotify duet', '14 Nov', 149], ['Hostel rent', '1 Dec', 6500]].map(([n, d, a]) => (
+            <div className="lc-row" key={n as string}><span>{n}<em>{d}</em></span><b>{rs(a as number)}</b></div>
+          ))}
+        </article>
+        <article className="fan-card lx-card">
+          <span className="lc-k">Where it went · November</span>
+          {[['Food & drinks', 627, 39, '#ff6f5e'], ['Shopping', 415, 26, '#e8908a'], ['Transport', 303, 19, '#d9a441'], ['Entertainment', 265, 16, '#b07aa1']].map(([l, a, p, c], i) => (
+            <div className="lc-rank" key={l as string}>
+              <span><i style={{ background: c as string }} />{l}</span>
+              <em>{p}%</em><b>{rs(a as number)}</b>
+              <span className="lc-track"><span style={{ width: `${((a as number) / 627) * 100}%`, background: i === 0 ? '#e0523d' : undefined }} /></span>
+            </div>
+          ))}
+        </article>
+        <article className="fan-card lx-card">
+          <span className="lc-k">Goals</span>
+          {[['Laptop fund', 18000, 45000], ['Goa trip', 4200, 12000], ['Emergency cushion', 9000, 10000]].map(([n, s, t]) => (
+            <div className="lc-goal" key={n as string}>
+              <span>{n}<em>{rs(s as number)} of {rs(t as number)}</em></span>
+              <span className="lc-track"><span style={{ width: `${((s as number) / (t as number)) * 100}%` }} /></span>
+            </div>
+          ))}
+        </article>
+      </div>
+    </section>
+  )
+}
+
+/* ============================================================
+   STATEMENT — words fill in as you scroll
+   ============================================================ */
+
+function Statement() {
+  const root = useRef<HTMLElement>(null)
+  useLive(root, 'st-live', (q) => {
+    const split = SplitText.create(q('.st-text')[0], { type: 'words' })
+    gsap.fromTo(split.words, { opacity: 0.16 }, {
+      opacity: 1, ease: 'none', stagger: 0.1,
+      scrollTrigger: { trigger: q('.st-text')[0], start: 'top 80%', end: 'bottom 45%', scrub: true },
+    })
+  })
+  return (
+    <section className="st" ref={root}>
+      <p className="st-text">
+        Your ledger is <span className="coral">encrypted before it's stored.</span> No ads, no bank logins,
+        no tracking scripts, and not a single number sold.
+      </p>
+      <p className="st-note">Encrypted in your browser with AES-256-GCM. <Link to="/privacy">Read the privacy page</Link></p>
+    </section>
+  )
+}
+
+/* ============================================================
+   JARS — one balance, three jars
+   ============================================================ */
+
+const CHIPS = [
+  ['Mess lunch', 'a'], ['Metro', 'b'], ['Rent', 'c'], ['Books', 'd'], ['Netflix', 'e'], ['Chai', 'f'], ['Laptop fund', 'g'], ['Blinkit', 'h'],
+]
+
+function Jars() {
+  const root = useRef<HTMLElement>(null)
+  const [on, setOn] = useState(false)
+  useLive(root, 'jar-live', (q) => {
+    q('.jar-chip').forEach((c, i) => {
+      gsap.to(c, { y: -(60 + (i % 4) * 50), ease: 'none', scrollTrigger: { trigger: root.current, start: 'top bottom', end: 'bottom top', scrub: true } })
+    })
+    gsap.from(q('.jar-seg'), {
+      width: 0, duration: 1.4, ease: 'expo.out', stagger: 0.15,
+      scrollTrigger: { trigger: q('.jar-card')[0], start: 'top 75%', once: true, onEnter: () => setOn(true) },
+    })
+  })
+  const save = useCountUp(10000, on, 1400)
+  const ess = useCountUp(8130, on, 1400)
+  const free = useCountUp(6720, on, 1400)
+  return (
+    <section className="jar" id="how" ref={root}>
+      {CHIPS.map(([t, k]) => <span key={t} className={`jar-chip c-${k}`} aria-hidden="true">{t}</span>)}
+      <p className="lx-kicker">How it works</p>
+      <Rise className="lx-h2">One balance. <span className="coral">Three jars.</span></Rise>
+      <p className="lx-lede">Tell Ledger what you have. It sets aside what you must not touch, keeps what's already promised, and shows the rest as yours to spend.</p>
+      <div className="jar-card lx-card">
+        <div className="jar-top">
+          <span className="lc-k">Total balance</span>
+          <b className="jar-total">₹24,850</b>
+        </div>
+        <div className="jar-bar">
+          <span className="jar-seg s1" style={{ width: '40.2%' }} />
+          <span className="jar-seg s2" style={{ width: '32.7%' }} />
+          <span className="jar-seg s3" style={{ width: '27.1%' }} />
+        </div>
+        <div className="jar-legend">
+          <div><i className="s1" /><span>Strict savings</span><b>{rs(on ? save : 10000)}</b><em>Not for spending</em></div>
+          <div><i className="s2" /><span>Essentials</span><b>{rs(on ? ess : 8130)}</b><em>Rent, metro, mess</em></div>
+          <div><i className="s3" /><span>Guilt-free</span><b>{rs(on ? free : 6720)}</b><em>Spend it on anything</em></div>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+/* ============================================================
+   FEATURES — bento of small working views
+   ============================================================ */
+
+function SafeCard() {
+  const ranges = [['Today', 156], ['Week', 1092], ['Month', 2960]] as const
+  const [i, setI] = useState(0)
+  useEffect(() => {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
+    const id = window.setInterval(() => setI((v) => (v + 1) % 3), 2600)
+    return () => window.clearInterval(id)
+  }, [])
+  const n = useCountUp(ranges[i][1], true, 700)
+  return (
+    <article className="bento-card lx-card b-safe">
+      <div className="b-head">
+        <div>
+          <h3>Know what's safe to spend</h3>
+          <p>Your guilt-free money, split over the days left in the month.</p>
+        </div>
+        <div className="seg" role="presentation">
+          {ranges.map(([l], k) => <span key={l} className={k === i ? 'on' : ''}>{l}</span>)}
+        </div>
+      </div>
+      <b className="b-big">{rs(n)}</b>
+      <Spark values={[2960, 2810, 2790, 2600, 2450, 2440, 2210, 2050, 1980, 1760, 1610]} w={520} h={70} />
     </article>
   )
 }
 
-function HorizontalSteps() {
-  const reduced = useReducedMotion()
-  const narrow = useIsNarrow()
-  const sectionRef = useRef<HTMLElement | null>(null)
-  const { scrollYProgress } = useScroll({ target: sectionRef, offset: ['start start', 'end end'] })
-  const visualProgress = useTransform(scrollYProgress, [0, 1], [0, 1])
-  const x = useTransform(visualProgress, [0.05, 0.95], ['0%', `-${((STEPS.length - 1) / STEPS.length) * 100}%`])
-  const bar = useSpring(visualProgress, { stiffness: 200, damping: 30 })
-
-  const head = (
-    <div className="hz-head lx-wrap">
-      <span className="lx-kicker k-yellow">A new way to keep track</span>
-      <h2 className="lx-title">Log. Budget. Recur. <span className="serif-it">Reflect.</span></h2>
-    </div>
-  )
-
-  if (reduced || narrow) {
-    return (
-      <section className="lx-hz lx-hz--static" data-nav="dark">
-        {head}
-        <div className="lx-wrap hz-stack">
-          {STEPS.map((s, i) => <StepPanel key={s.n} s={s} i={i} />)}
-        </div>
-      </section>
-    )
-  }
-
+function HideCard() {
+  const [shown, setShown] = useState(false)
+  useEffect(() => {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
+    const id = window.setInterval(() => setShown((v) => !v), 2400)
+    return () => window.clearInterval(id)
+  }, [])
   return (
-    <section className="lx-hz" ref={sectionRef} data-nav="dark">
-      <div className="hz-sticky">
-        {head}
-        <motion.div className="hz-track" style={{ x }}>
-          {STEPS.map((s, i) => <StepPanel key={s.n} s={s} i={i} />)}
-        </motion.div>
-        <div className="hz-progress lx-wrap" aria-hidden="true">
-          <motion.i style={{ scaleX: bar }} />
-        </div>
+    <article className="bento-card lx-card b-hide">
+      <h3>Private by default</h3>
+      <p>The big total stays hidden until you choose to look.</p>
+      <div className="hide-box">
+        <span className={`hide-num ${shown ? 'show' : ''}`}>
+          <span className="hn-real">₹24,850</span>
+          <span className="hn-mask">₹ ● ● ● ● ●</span>
+        </span>
+        <button type="button" className="hide-btn" tabIndex={-1} aria-hidden="true">{shown ? 'Hide balance' : 'Show balance'}</button>
+      </div>
+    </article>
+  )
+}
+
+function Features() {
+  const root = useRef<HTMLElement>(null)
+  useLive(root, 'bt-live', (q) => {
+    ScrollTrigger.batch(q('.bento-card'), {
+      start: 'top 88%', once: true,
+      onEnter: (b) => gsap.from(b, { y: 70, autoAlpha: 0, rotateX: -8, transformOrigin: '50% 100%', duration: 1.2, ease: 'expo.out', stagger: 0.1 }),
+    })
+    gsap.from(q('.bb-fill'), { scaleX: 0, transformOrigin: '0 50%', duration: 1.4, ease: 'expo.out', stagger: 0.12, scrollTrigger: { trigger: q('.b-budget')[0], start: 'top 80%', once: true } })
+    gsap.from(q('.ring-arc'), { strokeDashoffset: 264, duration: 1.8, ease: 'expo.out', scrollTrigger: { trigger: q('.b-goal')[0], start: 'top 80%', once: true } })
+  })
+  return (
+    <section className="bento" id="features" ref={root}>
+      <p className="lx-kicker">Features</p>
+      <Rise className="lx-h2">Small screens. <span className="coral">Clear answers.</span></Rise>
+      <div className="bento-grid">
+        <SafeCard />
+        <HideCard />
+        <article className="bento-card lx-card b-budget">
+          <h3>Budgets that warn early</h3>
+          <p>Each category fills up as you spend, and turns coral before it runs out.</p>
+          {[['Food & drinks', 82, '₹1,230 of ₹1,500'], ['Transport', 46, '₹460 of ₹1,000'], ['Shopping', 104, '₹520 of ₹500']].map(([l, p, s]) => (
+            <div className="bb" key={l as string}>
+              <span className="bb-l">{l}<em>{s}</em></span>
+              <span className="bb-track"><span className={`bb-fill ${(p as number) >= 100 ? 'over' : (p as number) >= 80 ? 'near' : ''}`} style={{ width: `${Math.min(100, p as number)}%` }} /></span>
+            </div>
+          ))}
+        </article>
+        <article className="bento-card lx-card b-goal">
+          <h3>Goals you can see</h3>
+          <p>Put money aside for something specific and watch it fill.</p>
+          <div className="ring-wrap">
+            <svg viewBox="0 0 100 100" width="132" height="132" aria-hidden="true">
+              <circle cx="50" cy="50" r="42" className="ring-bg" />
+              <circle cx="50" cy="50" r="42" className="ring-arc" strokeDasharray="264" strokeDashoffset={264 * 0.6} transform="rotate(-90 50 50)" />
+            </svg>
+            <div><b>40%</b><span>Laptop fund</span><em>₹18,000 of ₹45,000</em></div>
+          </div>
+        </article>
+        <article className="bento-card lx-card b-rec">
+          <h3>No surprise bills</h3>
+          <p>Rent and subscriptions are counted before they land.</p>
+          {[['Netflix split', 'Tomorrow', 199], ['Spotify duet', '14 Nov', 149], ['Hostel rent', '1 Dec', 6500]].map(([n, d, a]) => (
+            <div className="lc-row" key={n as string}><span>{n}<em>{d}</em></span><b>{rs(a as number)}</b></div>
+          ))}
+        </article>
       </div>
     </section>
   )
 }
 
 /* ============================================================
-   07 STUDENT MOMENTS — choice toggle + goal (kept, restyled)
+   SEARCH — merchant marquee that speeds up with your scroll
    ============================================================ */
 
-function Moments() {
-  const [choice, setChoice] = useState<'movie' | 'chai'>('chai')
-  const left = choice === 'movie' ? 27_00 : 215_00
-  const shown = useCountUp(left, true, 600)
-  const ringRef = useRef<HTMLDivElement | null>(null)
-  const inView = useInView(ringRef, { once: true, amount: 0.5 })
-
-  return (
-    <section className="lx-moments" id="story" data-nav="dark" data-flip="">
-      <div className="lx-wrap">
-        <Reveal className="lx-head">
-          <span className="lx-kicker k-ink">Ledger in the wild</span>
-          <h2 className="lx-title">Two moments <span className="serif-it">you'll recognise.</span></h2>
-        </Reveal>
-        <div className="moments-grid">
-          <Reveal delay={0.05}>
-            <div className="moment c-ink">
-              <span className="m-tag">9:41 pm · Friday</span>
-              <span className="m-label">Safe to spend tonight</span>
-              <div className="m-num">{formatINR(DEMO.safe)}</div>
-              <div className="m-toggle" role="group" aria-label="Pick tonight's plan">
-                {(['movie', 'chai'] as const).map((k) => (
-                  <button key={k} type="button" aria-pressed={choice === k} onClick={() => setChoice(k)}>
-                    {choice === k && <motion.span layoutId="m-toggle-pill" className="m-toggle-pill" transition={{ type: 'spring', stiffness: 420, damping: 32 }} />}
-                    <span className="m-toggle-text">{k === 'movie' ? 'Movie night' : 'Chai with the gang'}</span>
-                  </button>
-                ))}
-              </div>
-              <div className="m-left">
-                <span>Left after this</span>
-                <b className={choice === 'movie' ? 'tight' : ''}>{formatINR(shown)}</b>
-              </div>
-              <AnimatePresence mode="wait">
-                <motion.p
-                  key={choice}
-                  className="m-cap"
-                  initial={{ opacity: 0, y: 12 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -12 }}
-                  transition={{ duration: 0.3 }}
-                >
-                  {choice === 'movie'
-                    ? 'Movie night takes ₹260 of your ₹287 — tomorrow gets tight. Ledger flags it before you book.'
-                    : 'Chai keeps ₹215 free for the week — movie plans survive till Friday. Say yes to this one.'}
-                </motion.p>
-              </AnimatePresence>
-            </div>
-          </Reveal>
-          <Reveal delay={0.15}>
-            <div className="moment c-pink" ref={ringRef}>
-              <span className="m-tag">Goal · first laptop</span>
-              <span className="m-label">Saved so far</span>
-              <div className="m-num">
-                ₹8,400 <small>/ ₹25,000</small>
-              </div>
-              <div className="m-bar">
-                <motion.i initial={{ width: 0 }} animate={{ width: inView ? '34%' : 0 }} transition={{ duration: 1.3, ease: EXPO, delay: 0.2 }} />
-              </div>
-              <p className="m-cap">About ₹350 a week, moved from guilt-free money. Two trips skipped — the laptop fund noticed every time.</p>
-              <p className="m-foot">Goals are fed from spending money — never from your protected line.</p>
-            </div>
-          </Reveal>
-        </div>
-      </div>
-    </section>
-  )
-}
-
-/* ============================================================
-   08 THAT'S NOT ALL — mini features with pointer tilt
-   ============================================================ */
-
-const MINI = [
-  { icon: Filter, t: 'Filters that stick', d: 'Slice by category, date or amount in a tap.' },
-  { icon: Pencil, t: 'Notes on any spend', d: 'Leave yourself a hint, find it later.' },
-  { icon: Download, t: 'Export in seconds', d: 'Your history as a CSV, whenever you want it.' },
-  { icon: Sparkle, t: 'Plain-language insights', d: 'Where it went, said like a friend would.' },
-  { icon: Calendar, t: 'Month at a glance', d: 'Trends across weeks without the spreadsheet.' },
-  { icon: Shield, t: 'Privacy first', d: 'Balance masked on load. Peek on your terms.' },
+const QUERIES: { q: string; rows: [string, string, number][] }[] = [
+  { q: 'chai', rows: [['Chai + samosa', 'Today', 40], ['Chai + samosa', 'Mon', 35], ['Chai + samosa', '3 Nov', 40]] },
+  { q: 'metro', rows: [['Metro recharge', '9 Nov', 200], ['Metro recharge', '28 Oct', 200], ['Metro recharge', '14 Oct', 150]] },
+  { q: 'netflix', rows: [['Netflix split', '12 Oct', 199], ['Netflix split', '12 Sep', 199], ['Netflix split', '12 Aug', 199]] },
 ]
 
-function TiltCard({ children, i }: { children: React.ReactNode; i: number }) {
-  const reduced = useReducedMotion()
-  const rx = useSpring(0, { stiffness: 200, damping: 16 })
-  const ry = useSpring(0, { stiffness: 200, damping: 16 })
+function SearchBox() {
+  const [qi, setQi] = useState(0)
+  const [typed, setTyped] = useState(QUERIES[0].q)
+  useEffect(() => {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
+    let cancelled = false
+    let n = 0
+    const word = QUERIES[qi].q
+    setTyped('')
+    const type = window.setInterval(() => {
+      n++
+      if (!cancelled) setTyped(word.slice(0, n))
+      if (n >= word.length) window.clearInterval(type)
+    }, 110)
+    const next = window.setTimeout(() => setQi((v) => (v + 1) % QUERIES.length), 3600)
+    return () => { cancelled = true; window.clearInterval(type); window.clearTimeout(next) }
+  }, [qi])
+  const done = typed === QUERIES[qi].q
   return (
-    <motion.div
-      className="mini"
-      style={{ rotateX: rx, rotateY: ry, transformPerspective: 700 }}
-      initial={{ opacity: 0, y: 60, rotate: i % 2 ? 4 : -4 }}
-      whileInView={{ opacity: 1, y: 0, rotate: 0 }}
-      viewport={{ once: true, amount: 0.25 }}
-      transition={{ duration: 0.8, delay: (i % 3) * 0.1, ease: EXPO }}
-      onPointerMove={(e) => {
-        if (reduced || e.pointerType !== 'mouse') return
-        const r = e.currentTarget.getBoundingClientRect()
-        ry.set(((e.clientX - r.left) / r.width - 0.5) * 18)
-        rx.set(-((e.clientY - r.top) / r.height - 0.5) * 18)
-      }}
-      onPointerLeave={() => {
-        rx.set(0)
-        ry.set(0)
-      }}
-    >
-      {children}
-    </motion.div>
+    <div className="sx-box lx-card">
+      <div className="sx-input">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
+        <span>{typed}<i className="caret" /></span>
+      </div>
+      <div className={`sx-rows ${done ? 'on' : ''}`}>
+        {QUERIES[qi].rows.map(([n, d, a], i) => (
+          <div className="lc-row" key={`${qi}-${i}`} style={{ transitionDelay: `${i * 70}ms` }}><span>{n}<em>{d}</em></span><b>{rs(a)}</b></div>
+        ))}
+      </div>
+    </div>
   )
 }
 
-function MoreFeatures() {
+function Search() {
+  const root = useRef<HTMLElement>(null)
+  useLive(root, 'sx-live', (q) => {
+    const tweens = q('.sx-track').map((row, i) =>
+      i % 2 === 0
+        ? gsap.fromTo(row, { xPercent: 0 }, { xPercent: -50, duration: 46 + i * 6, ease: 'none', repeat: -1 })
+        : gsap.fromTo(row, { xPercent: -50 }, { xPercent: 0, duration: 52, ease: 'none', repeat: -1 }))
+    const speed = { v: 1 }
+    ScrollTrigger.create({
+      trigger: root.current, start: 'top bottom', end: 'bottom top',
+      onUpdate: (self) => {
+        const v = Math.min(6, 1 + Math.abs(self.getVelocity()) / 260)
+        if (v > speed.v) {
+          speed.v = v
+          gsap.to(speed, { v: 1, duration: 1.2, ease: 'power3.out', overwrite: true, onUpdate: () => tweens.forEach((t) => t.timeScale(speed.v)) })
+        }
+      },
+    })
+  })
   return (
-    <section className="lx-more" data-nav="dark">
-      <div className="lx-wrap">
-        <Reveal className="lx-head">
-          <span className="lx-kicker k-yellow">That's not all</span>
-          <h2 className="lx-title">Small things, <span className="serif-it">done properly.</span></h2>
-        </Reveal>
-        <div className="mini-grid">
-          {MINI.map((m, i) => {
-            const Icon = m.icon
-            return (
-              <TiltCard key={m.t} i={i}>
-                <span className="mini-ic"><Icon size={22} /></span>
-                <h3>{m.t}</h3>
-                <p>{m.d}</p>
-              </TiltCard>
-            )
-          })}
+    <section className="sx" ref={root}>
+      <div className="sx-marquee" aria-hidden="true">
+        {MERCHANTS.map((row, i) => (
+          <div className="sx-line" key={i}>
+            <div className="sx-track">
+              {[...row, ...row].map((m, k) => <span key={k} className="sx-chip">{m}</span>)}
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="sx-center">
+        <Rise className="lx-h2">Search anything. <span className="coral">Find it fast.</span></Rise>
+        <p className="lx-lede">Type a word and every matching expense shows up, with its date and amount.</p>
+        <SearchBox />
+      </div>
+    </section>
+  )
+}
+
+/* ============================================================
+   CHARTS — the same flowing charts as the app
+   ============================================================ */
+
+function Charts() {
+  return (
+    <section className="ch">
+      <p className="lx-kicker">Analytics</p>
+      <Rise className="lx-h2">Watch the month <span className="coral">move.</span></Rise>
+      <div className="ch-grid">
+        <article className="lx-card ch-card ch-wide">
+          <div className="ch-head">
+            <div>
+              <h3>This month so far</h3>
+              <p>₹744 more than this point last month</p>
+            </div>
+            <b>₹1,610</b>
+          </div>
+          <TideChart current={TIDE_NOW} previous={TIDE_PREV} days={30} today={11} height={250} />
+          <div className="flow-key">
+            <span><i className="k-cur" />This month</span>
+            <span><i className="k-prev" />Last month</span>
+            <span><i className="k-proj" />At this pace</span>
+          </div>
+        </article>
+        <article className="lx-card ch-card">
+          <div className="ch-head">
+            <div>
+              <h3>How your spending flows</h3>
+              <p>Every 3 days, last 30 days</p>
+            </div>
+          </div>
+          <StreamChart series={STREAM} labels={STREAM_LABELS} height={230} />
+          <div className="flow-key">
+            {STREAM.map((s) => <span key={s.id}><i style={{ background: s.color }} />{s.label}</span>)}
+          </div>
+        </article>
+      </div>
+    </section>
+  )
+}
+
+/* ============================================================
+   STEPS — sticky phone, three beats
+   ============================================================ */
+
+function ScreenLog() {
+  return (
+    <div className="scr scr-log">
+      <StatusBar />
+      <p className="pd-hi">Add expense</p>
+      <div className="pd-card log-amt"><span>₹</span><b>40</b></div>
+      <div className="log-cats">
+        {['Food', 'Transport', 'Study', 'Fun', 'Shopping', 'Living'].map((c, i) => <span key={c} className={i === 0 ? 'on' : ''}>{c}</span>)}
+      </div>
+      <div className="pd-card log-field"><em>Description</em>Chai + samosa</div>
+      <div className="pd-card log-field"><em>Paid with</em>UPI</div>
+      <span className="log-save">Save expense</span>
+    </div>
+  )
+}
+function ScreenPlan() {
+  return (
+    <div className="scr">
+      <StatusBar />
+      <p className="pd-hi">Budgets</p>
+      {[['Food & drinks', 82, '₹1,230 of ₹1,500'], ['Transport', 46, '₹460 of ₹1,000'], ['Education', 30, '₹150 of ₹500'], ['Shopping', 100, '₹500 of ₹500']].map(([l, p, s]) => (
+        <div className="pd-card" key={l as string}>
+          <span className="pd-label">{l}</span>
+          <b className="pd-mid">{s}</b>
+          <span className="pd-bar"><span className={(p as number) >= 100 ? 'over' : ''} style={{ width: `${p}%` }} /></span>
+        </div>
+      ))}
+    </div>
+  )
+}
+function ScreenReflect() {
+  return (
+    <div className="scr">
+      <StatusBar />
+      <p className="pd-hi">Analytics</p>
+      <div className="pd-card">
+        <span className="pd-label">Daily spending</span>
+        <b className="pd-mid">avg ₹109</b>
+        <Spark values={[60, 140, 30, 90, 260, 40, 20, 120, 538, 90, 70, 180]} />
+      </div>
+      <div className="pd-card">
+        <span className="pd-label">Monthly savings</span>
+        <b className="pd-mid">+₹5,390</b>
+        <Spark values={[4200, 4800, 4100, 5390]} />
+      </div>
+      <div className="pd-card">
+        <span className="pd-label">Top category</span>
+        <b className="pd-mid">Food & drinks · 38%</b>
+      </div>
+    </div>
+  )
+}
+
+const STEPS = [
+  { k: '01', t: 'Log', h: 'Add an expense in seconds', p: 'Amount, category, done. Notes and payment method are there when you want them.', S: ScreenLog },
+  { k: '02', t: 'Plan', h: 'Give every category a limit', p: 'Budgets fill as you spend, so you see trouble a week before it arrives.', S: ScreenPlan },
+  { k: '03', t: 'Reflect', h: 'See where it actually went', p: 'Daily spending, category flow and monthly savings, from 7 days to a year.', S: ScreenReflect },
+]
+
+function Steps() {
+  const root = useRef<HTMLElement>(null)
+  const [active, setActive] = useState(0)
+  useLive(root, 'sp-live', (q, desk) => {
+    if (!desk) return
+    q('.sp-step').forEach((s, i) => {
+      ScrollTrigger.create({ trigger: s, start: 'top 55%', end: 'bottom 55%', onToggle: (self) => self.isActive && setActive(i) })
+    })
+    gsap.fromTo(q('.sp-progress span')[0], { scaleY: 0 }, { scaleY: 1, ease: 'none', transformOrigin: '50% 0', scrollTrigger: { trigger: q('.sp-steps')[0], start: 'top 55%', end: 'bottom 55%', scrub: true } })
+  })
+  return (
+    <section className="sp" ref={root}>
+      <div className="sp-intro">
+        <p className="lx-kicker">A new way to keep track</p>
+        <Rise className="lx-h2">Log. Plan. <span className="coral">Reflect.</span></Rise>
+      </div>
+      <div className="sp-grid">
+        <div className="sp-phone-col">
+          <Phone className="sp-phone">
+            {STEPS.map(({ S }, i) => (
+              <div key={i} className={`sp-screen ${i === active ? 'on' : ''}`} aria-hidden={i !== active}><S /></div>
+            ))}
+          </Phone>
+        </div>
+        <div className="sp-steps">
+          <div className="sp-progress" aria-hidden="true"><span /></div>
+          {STEPS.map(({ k, t, h, p, S }, i) => (
+            <div key={k} className={`sp-step ${i === active ? 'on' : ''}`}>
+              <span className="sp-k">{k} · {t}</span>
+              <h3>{h}</h3>
+              <p>{p}</p>
+              <Phone className="sp-inline"><S /></Phone>
+            </div>
+          ))}
         </div>
       </div>
     </section>
@@ -1226,50 +782,72 @@ function MoreFeatures() {
 }
 
 /* ============================================================
-   09 CTA — giant type that opens up with scroll
+   MORE — horizontal shelf
+   ============================================================ */
+
+const MORE = [
+  ['Protected balance', 'Keep a minimum in your account that safe-to-spend never touches.'],
+  ['Essentials first', 'Plan rent, metro and mess fees so they come out before guilt-free money.'],
+  ['Export to CSV', 'Download every transaction from Settings whenever you want.'],
+  ['Notes on anything', 'Leave a note on an expense so future you remembers why.'],
+  ['Any phone, any laptop', 'It runs in the browser, so there is nothing to install.'],
+  ['Leave whenever', 'Delete your account from Settings and your data goes with it.'],
+]
+
+function More() {
+  const shelf = useRef<HTMLDivElement>(null)
+  const root = useRef<HTMLElement>(null)
+  const nudge = (dir: number) => shelf.current?.scrollBy({ left: dir * Math.min(420, shelf.current.clientWidth * 0.8), behavior: 'smooth' })
+  useLive(root, 'mo-live', (q) => {
+    gsap.from(q('.mo-card'), { x: 120, autoAlpha: 0, duration: 1.2, ease: 'expo.out', stagger: 0.08, scrollTrigger: { trigger: q('.mo-shelf')[0], start: 'top 85%', once: true } })
+  })
+  return (
+    <section className="mo" ref={root}>
+      <div className="mo-head">
+        <div>
+          <Rise className="lx-h2">That's not all</Rise>
+          <p className="lx-lede">The small things that make it feel finished.</p>
+        </div>
+        <div className="mo-arrows">
+          <button type="button" aria-label="Previous" onClick={() => nudge(-1)}>←</button>
+          <button type="button" aria-label="Next" onClick={() => nudge(1)}>→</button>
+        </div>
+      </div>
+      <div className="mo-shelf" ref={shelf} data-lenis-prevent-wheel="">
+        {MORE.map(([t, p], i) => (
+          <article key={t} className="mo-card lx-card">
+            <span className="mo-n">{String(i + 1).padStart(2, '0')}</span>
+            <h3>{t}</h3>
+            <p>{p}</p>
+          </article>
+        ))}
+      </div>
+    </section>
+  )
+}
+
+/* ============================================================
+   CLOSING + FOOTER
    ============================================================ */
 
 function Closing({ onDemo }: { onDemo: () => void }) {
-  const reduced = useReducedMotion()
-  const ref = useRef<HTMLElement | null>(null)
-  const { scrollYProgress } = useScroll({ target: ref, offset: ['start end', 'center center'] })
-  const scale = useTransform(scrollYProgress, [0, 1], [reduced ? 1 : 0.7, 1])
-  const spacing = useTransform(scrollYProgress, [0, 1], [reduced ? '-0.03em' : '0.2em', '-0.03em'])
-  const clip = useTransform(scrollYProgress, [0, 1], reduced ? ['circle(150% at 50% 50%)', 'circle(150% at 50% 50%)'] : ['circle(8% at 50% 60%)', 'circle(150% at 50% 50%)'])
-
+  const root = useRef<HTMLElement>(null)
+  useLive(root, 'cl-live', (q) => {
+    gsap.from(q('.tile.on'), {
+      scaleY: 0, transformOrigin: '50% 100%', ease: 'none', stagger: { each: 0.015, from: 'end', grid: [TILE_ROWS, TILE_COLS], axis: 'y' },
+      scrollTrigger: { trigger: root.current, start: 'top 80%', end: 'bottom bottom', scrub: 1 },
+    })
+  })
   return (
-    <section className="lx-cta" ref={ref} data-nav="dark">
-      <motion.div className="cta-blob" style={{ clipPath: clip }} aria-hidden="true" />
-      <div className="lx-wrap cta-inner">
-        <motion.div
-          className="cta-badge"
-          aria-hidden="true"
-          animate={reduced ? undefined : { rotate: 360 }}
-          transition={{ duration: 14, repeat: Infinity, ease: 'linear' }}
-        >
-          <svg viewBox="0 0 120 120">
-            <defs>
-              <path id="cta-circle" d="M60,60 m-46,0 a46,46 0 1,1 92,0 a46,46 0 1,1 -92,0" />
-            </defs>
-            <text>
-              <textPath href="#cta-circle">FREE FOR STUDENTS · NO CARD · NO FUSS ·</textPath>
-            </text>
-          </svg>
-        </motion.div>
-        <motion.h2 className="cta-title" style={{ scale, letterSpacing: spacing }}>
-          Know what you can <span className="serif-it">actually</span> spend.
-        </motion.h2>
-        <p className="cta-sub">Set up in under a minute. Start with the demo, keep it if it clicks.</p>
-        <div className="hero-ctas cta-ctas">
-          <Magnetic>
-            <Link to="/app" className="lx-btn lx-btn-solid lx-btn-lg">
-              Enter your financial world <ArrowRight size={18} />
-            </Link>
-          </Magnetic>
-          <button type="button" className="lx-btn lx-btn-ghost lx-btn-lg" onClick={onDemo}>
-            Try the demo
-          </button>
-        </div>
+    <section className="cl" ref={root}>
+      <Rise className="lx-h1">Start with <span className="coral">what you have</span></Rise>
+      <p className="lx-lede">Free for students. No card, no bank login.</p>
+      <div className="h-ctas">
+        <Link to="/signup" className="lx-btn lx-btn-coral">Get started</Link>
+        <button type="button" className="lx-btn lx-btn-line" onClick={onDemo}>Try the demo</button>
+      </div>
+      <div className="h-tiles cl-tiles" aria-hidden="true" style={{ gridTemplateColumns: `repeat(${TILE_COLS}, 1fr)` }}>
+        {TILES.map((t, i) => <span key={i} className={`tile ${t ? `on t-${t}` : ''}`} />)}
       </div>
     </section>
   )
@@ -1277,75 +855,52 @@ function Closing({ onDemo }: { onDemo: () => void }) {
 
 function Footer({ onDemo }: { onDemo: () => void }) {
   return (
-    <footer className="lx-footer" data-nav="dark" data-flip="">
-      <div className="lx-wrap foot-top">
-        <div className="foot-brand">
-          <LedgerLogo size={28} />
-          <p>The private money app for students.</p>
-        </div>
-        <nav className="foot-links" aria-label="Footer">
-          <Link to="/signup">Get started</Link>
-          <Link to="/login">Log in</Link>
-          <button type="button" onClick={onDemo}>Try the demo</button>
-          <Link to="/privacy">Privacy</Link>
-        </nav>
+    <footer className="ft">
+      <div className="ft-brand">
+        <LedgerLogo size={26} />
+        <span>Ledger</span>
       </div>
-      {/* Letters sit clipped below the fold line, so the row (not each letter) is the in-view trigger. */}
-      <motion.div
-        className="foot-word"
-        aria-hidden="true"
-        initial="hidden"
-        whileInView="show"
-        viewport={{ once: true, amount: 0.3 }}
-        transition={{ staggerChildren: 0.06 }}
-      >
-        {'Ledger'.split('').map((ch, i) => (
-          <motion.span
-            key={i}
-            variants={{ hidden: { y: '100%' }, show: { y: '0%' } }}
-            transition={{ duration: 0.9, ease: EXPO }}
-          >
-            {ch}
-          </motion.span>
-        ))}
-      </motion.div>
+      <nav className="ft-links" aria-label="Footer">
+        <Link to="/signup">Get started</Link>
+        <Link to="/login">Log in</Link>
+        <button type="button" onClick={onDemo}>Try the demo</button>
+        <Link to="/privacy">Privacy</Link>
+      </nav>
+      <span className="ft-c">© {new Date().getFullYear()} Ledger</span>
     </footer>
   )
 }
-
-/* ============================================================
-   PAGE
-   ============================================================ */
 
 export default function Landing() {
   const { demoSignIn } = useApp()
   const navigate = useNavigate()
   useSmoothScroll()
-  /** One-click demo entry: sign into the seeded account, then move into the app. */
   const runDemo = () => {
     void demoSignIn().then((err) => {
       if (!err) navigate('/app')
     })
   }
+  useEffect(() => {
+    // Fonts change line breaks; re-measure pins once they are in.
+    void document.fonts?.ready.then(() => ScrollTrigger.refresh())
+  }, [])
 
   return (
-    <MotionConfig reducedMotion="user">
-      <div className="landing lx">
-        <CursorBlob />
-        <Nav onDemo={runDemo} />
-        <main>
-          <Hero onDemo={runDemo} />
-          <Ticker />
-          <MoneyStory />
-          <Bento />
-          <SearchSection />
-          <HorizontalSteps />
-          <Moments />
-          <MoreFeatures />
-          <Closing onDemo={runDemo} />
-        </main>
-        <Footer onDemo={runDemo} />
-      </div>
-    </MotionConfig>
+    <div className="lx">
+      <Nav onDemo={runDemo} />
+      <main>
+        <Hero onDemo={runDemo} />
+        <Fan />
+        <Statement />
+        <Jars />
+        <Features />
+        <Search />
+        <Charts />
+        <Steps />
+        <More />
+        <Closing onDemo={runDemo} />
+      </main>
+      <Footer onDemo={runDemo} />
+    </div>
   )
 }

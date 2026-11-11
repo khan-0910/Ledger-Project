@@ -3,7 +3,6 @@ import { Link, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { useApp } from '../lib/store'
 import LedgerLogo from '../components/Logo'
-import { FloatObject } from '../components/bits/Stickers'
 import { Eye, EyeOff } from '../components/Icons'
 
 export default function Login() {
@@ -83,12 +82,6 @@ export default function Login() {
 export function AuthLayout({ title, sub, children }: { title: string; sub: string; children: React.ReactNode }) {
   return (
     <div className="auth-page">
-      <div className="auth-stickers" aria-hidden="true">
-        <FloatObject kind="coin-stack" size={54} seed={4} depth="mid" className="as as-1" delay={0.35} />
-        <FloatObject kind="receipt" size={40} seed={7} depth="far" className="as as-2" delay={0.55} />
-        <FloatObject kind="sparkle" size={30} seed={10} depth="far" className="as as-3" delay={0.7} />
-        <FloatObject kind="wallet" size={46} seed={2} depth="near" className="as as-4" delay={0.45} />
-      </div>
       <motion.div
         initial={{ opacity: 0, y: 18 }}
         animate={{ opacity: 1, y: 0 }}
@@ -101,8 +94,8 @@ export function AuthLayout({ title, sub, children }: { title: string; sub: strin
         </Link>
       </motion.div>
       <motion.div
-        initial={{ opacity: 0, y: 26, rotate: -1 }}
-        animate={{ opacity: 1, y: 0, rotate: -0.6 }}
+        initial={{ opacity: 0, y: 26 }}
+        animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.1, duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
         className="auth-card card"
       >
