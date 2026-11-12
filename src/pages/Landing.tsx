@@ -196,15 +196,15 @@ function Nav({ onDemo }: { onDemo: () => void }) {
   }, [])
   return (
     <header className={`lx-nav ${state.solid ? 'solid' : ''} ${state.hidden ? 'away' : ''}`}>
+      <Link to="/" className="lx-brand" aria-label="Ledger home">
+        <LedgerLogo size={28} />
+        <span>Ledger</span>
+      </Link>
       <nav className="lx-nav-l" aria-label="Sections">
         <a href="#how">How it works</a>
         <a href="#features">Features</a>
         <Link to="/privacy">Privacy</Link>
       </nav>
-      <Link to="/" className="lx-brand" aria-label="Ledger home">
-        <LedgerLogo size={28} />
-        <span>Ledger</span>
-      </Link>
       <div className="lx-nav-r">
         <button type="button" className="lx-link" onClick={onDemo}>Demo</button>
         <Link to="/login" className="lx-link">Log in</Link>
@@ -215,46 +215,61 @@ function Nav({ onDemo }: { onDemo: () => void }) {
 }
 
 /* ============================================================
-   HERO — headline over a rising tide of tiles; the phone peeks up,
-   then pins in the middle while its own screen scrolls.
+   HERO — copy on the left, phone on the right. On desktop the
+   section pins: the phone's screen scrolls and the list of notes
+   beside it lights up one by one. A slow tide rolls underneath.
    ============================================================ */
 
-const TILE_COLS = 20
-const TILE_ROWS = 4
-/** Which tiles are filled, from the top row down: denser toward the bottom, like a rising tide. */
-const TILES = Array.from({ length: TILE_COLS * TILE_ROWS }, (_, i) => {
-  const r = Math.floor(i / TILE_COLS)
-  const c = i % TILE_COLS
-  const h = Math.abs(Math.sin(c * 12.9898 + r * 78.233) * 43758.5453) % 1
-  const filled = h < [0.14, 0.34, 0.62, 0.88][r]
-  const h2 = (h * 97.13) % 1
-  const tone = h2 < 0.07 ? 'coral' : h2 < 0.26 ? 'sand' : h2 < 0.64 ? 'deep' : 'mid'
-  return filled ? tone : ''
-})
+/** Layered sea: each layer is a smooth wave drawn twice as wide so it can drift in a loop. */
+const WAVE_W = 1440
+function wavePath(amp: number, len: number, phase: number, base: number, h: number): string {
+  const pts: [number, number][] = []
+  for (let x = 0; x <= WAVE_W * 2; x += 60) pts.push([x, base + Math.sin((x / len) * Math.PI * 2 + phase) * amp])
+  return `${smoothPath(pts)} L${WAVE_W * 2},${h} L0,${h} Z`
+}
+const WAVES = [
+  { d: wavePath(10, 720, 0.4, 40, 200), cls: 'w-back' },
+  { d: wavePath(14, 480, 2.1, 80, 200), cls: 'w-mid' },
+  { d: wavePath(8, 360, 4.0, 120, 200), cls: 'w-front' },
+]
 
-const TOASTS = [
-  { side: 'l', k: 'Safe to spend', t: '₹156 today', s: 'Guilt-free left, over 19 days' },
-  { side: 'r', k: 'Recurring', t: 'Netflix split tomorrow', s: '₹199 from guilt-free' },
-  { side: 'l', k: 'Budget', t: 'Food is at 82%', s: '₹270 left for November' },
-  { side: 'r', k: 'Goal', t: 'Laptop fund 40% there', s: '₹18,000 of ₹45,000' },
+function Tide({ className = '' }: { className?: string }) {
+  const root = useRef<HTMLDivElement>(null)
+  useGSAP(() => {
+    const mm = gsap.matchMedia()
+    mm.add(MOTION, () => {
+      const layers = gsap.utils.toArray<SVGGElement>('.wave', root.current)
+      layers.forEach((l, i) => {
+        gsap.to(l, { xPercent: -50, duration: [38, 26, 18][i], ease: 'none', repeat: -1 })
+      })
+      gsap.from(layers, { yPercent: 60, duration: 1.6, ease: 'expo.out', stagger: 0.12, scrollTrigger: { trigger: root.current, start: 'top 95%', once: true } })
+    })
+    return () => mm.revert()
+  }, { scope: root })
+  return (
+    <div className={`tide ${className}`} ref={root} aria-hidden="true">
+      <svg viewBox={`0 0 ${WAVE_W} 200`} preserveAspectRatio="none">
+        {WAVES.map((w) => (
+          <g key={w.cls} className={`wave ${w.cls}`}>
+            <path d={w.d} />
+          </g>
+        ))}
+      </svg>
+    </div>
+  )
+}
+
+const NOTES = [
+  { k: 'Safe to spend', t: '₹156 today', s: 'Guilt-free left, over 19 days' },
+  { k: 'Recurring', t: 'Netflix split tomorrow', s: '₹199 from guilt-free' },
+  { k: 'Budget', t: 'Food is at 82%', s: '₹270 left for November' },
+  { k: 'Goal', t: 'Laptop fund 40% there', s: '₹18,000 of ₹45,000' },
 ]
 
 function Hero({ onDemo }: { onDemo: () => void }) {
   const root = useRef<HTMLElement>(null)
 
   useLive(root, 'h-live', (q, desk) => {
-    const stage = root.current!
-    const copy = q('.h-copy')[0]
-    const phone = q('.h-phone')[0]
-    const peek = () => {
-      const s = stage.getBoundingClientRect()
-      const c = copy.getBoundingClientRect()
-      const ph = phone.offsetHeight
-      const centeredTop = s.height / 2 - ph / 2
-      return Math.max(c.bottom - s.top + 40 - centeredTop, s.height * 0.3)
-    }
-    gsap.set(phone, { y: peek })
-
     const title = q('.h-title')[0]
     const split = SplitText.create(title, { type: 'lines,words', mask: 'lines', linesClass: 'rise-line' })
     const intro = gsap.timeline({ defaults: { ease: 'expo.out' } })
@@ -263,27 +278,26 @@ function Hero({ onDemo }: { onDemo: () => void }) {
       .from(split.words, { yPercent: 115, duration: 1.3, stagger: 0.07 }, 0.1)
       .from(q('.h-sub'), { y: 20, autoAlpha: 0, duration: 1 }, 0.55)
       .from(q('.h-ctas > *'), { y: 20, autoAlpha: 0, duration: 1, stagger: 0.08 }, 0.65)
-      .from(q('.tile.on'), { scaleY: 0, transformOrigin: '50% 100%', duration: 1, ease: 'expo.out', stagger: { each: 0.02, from: 'end', grid: [TILE_ROWS, TILE_COLS], axis: 'y' } }, 0.3)
-      .from(q('.h-phone-in'), { y: '70vh', duration: 1.8 }, 0.35)
+      .from(q('.h-phone-in'), { y: 120, rotate: 4, autoAlpha: 0, duration: 1.6 }, 0.3)
+    if (!desk) return
 
     const screen = q('.ph-scroll')[0]
     const view = q('.h-phone .ph-screen')[0]
     const travel = () => -(screen.scrollHeight - view.clientHeight + 24)
-    const toasts = q('.h-toast')
+    const notes = q('.h-note')
+    gsap.set(q('.h-notes'), { top: () => q('.h-lead')[0].offsetTop })
 
     const tl = gsap.timeline({
-      scrollTrigger: { trigger: stage, start: 'top top', end: desk ? '+=240%' : '+=200%', pin: true, scrub: 1, invalidateOnRefresh: true },
+      scrollTrigger: { trigger: root.current, start: 'top top', end: '+=200%', pin: true, scrub: 1, invalidateOnRefresh: true },
     })
-    tl.to(copy, { y: -140, autoAlpha: 0, duration: 0.8, ease: 'power2.in' }, 0)
-      .to(q('.tile'), { yPercent: 120, autoAlpha: 0, duration: 1, stagger: { each: 0.01, from: 'random' } }, 0)
-      .to(phone, { y: 0, duration: 1, ease: 'power2.inOut' }, 0)
-      .to(screen, { y: travel, duration: 3.4, ease: 'none' }, 1)
-    toasts.forEach((t, i) => {
-      const from = TOASTS[i].side === 'l' ? -60 : 60
-      tl.fromTo(t, { x: from, y: 24, autoAlpha: 0, rotate: from > 0 ? 3 : -3 }, { x: 0, y: 0, autoAlpha: 1, rotate: 0, duration: 0.45, ease: 'back.out(1.5)' }, 1.1 + i * 0.7)
-      if (!desk && i < toasts.length - 1) tl.to(t, { autoAlpha: 0, y: -16, duration: 0.3 }, 1.1 + i * 0.7 + 0.6)
+    tl.to(q('.h-lead'), { autoAlpha: 0, y: -24, duration: 0.5 }, 0)
+      .to(q('.h-notes'), { autoAlpha: 1, duration: 0.3 }, 0.4)
+      .to(screen, { y: travel, duration: 3.2, ease: 'none' }, 0.4)
+    notes.forEach((n, i) => {
+      tl.to(n, { opacity: 1, x: 0, duration: 0.3, ease: 'power2.out' }, 0.6 + i * 0.75)
+      if (i < notes.length - 1) tl.to(n, { opacity: 0.4, duration: 0.3 }, 0.6 + (i + 1) * 0.75)
     })
-    tl.to({}, { duration: 0.4 })
+    tl.to({}, { duration: 0.3 })
   })
 
   return (
@@ -291,93 +305,99 @@ function Hero({ onDemo }: { onDemo: () => void }) {
       <div className="h-copy">
         <p className="h-pill">Free for students · no bank login</p>
         <h1 className="h-title">Spend without <span className="coral">the guilt</span></h1>
-        <p className="h-sub">
-          Ledger splits your balance into savings you don't touch and money you can spend freely,
-          then tells you what's safe to spend today.
-        </p>
-        <div className="h-ctas">
-          <Link to="/signup" className="lx-btn lx-btn-coral">Get started</Link>
-          <button type="button" className="lx-btn lx-btn-line" onClick={onDemo}>Try the demo</button>
+        <div className="h-lead">
+          <p className="h-sub">
+            Ledger splits your balance into savings you don't touch and money you can spend freely,
+            then tells you what's safe to spend today.
+          </p>
+          <div className="h-ctas">
+            <Link to="/signup" className="lx-btn lx-btn-coral">Get started</Link>
+            <button type="button" className="lx-btn lx-btn-line" onClick={onDemo}>Try the demo</button>
+          </div>
         </div>
-      </div>
-
-      <div className="h-tiles" aria-hidden="true" style={{ gridTemplateColumns: `repeat(${TILE_COLS}, 1fr)` }}>
-        {TILES.map((t, i) => <span key={i} className={`tile ${t ? `on t-${t}` : ''}`} />)}
+        <ol className="h-notes" aria-hidden="true">
+          {NOTES.map((n, i) => (
+            <li key={i} className="h-note">
+              <span className="hn-i">{String(i + 1).padStart(2, '0')}</span>
+              <span className="hn-k">{n.k}</span>
+              <b>{n.t}</b>
+              <span className="hn-s">{n.s}</span>
+            </li>
+          ))}
+        </ol>
       </div>
 
       <div className="h-phone">
         <div className="h-phone-in">
           <Phone><PhoneDash /></Phone>
-          {TOASTS.map((t, i) => (
-            <div key={i} className={`h-toast side-${t.side} n${i}`} aria-hidden="true">
-              <span className="ht-k"><i />{t.k}</span>
-              <b>{t.t}</b>
-              <span className="ht-s">{t.s}</span>
+        </div>
+      </div>
+      <Tide className="h-tide" />
+    </section>
+  )
+}
+
+/* ============================================================
+   RECEIPT — the month, printed. A till slip unrolls as you
+   scroll and totals up to today's safe-to-spend figure.
+   ============================================================ */
+
+const SLIP: [string, string, number][] = [
+  ['01 Nov', 'Pocket money in', 8000],
+  ['01 Nov', 'Moved to savings', -2400],
+  ['03 Nov', 'Mess lunch × 5', -450],
+  ['05 Nov', 'Metro recharge', -200],
+  ['08 Nov', 'Reference book', -380],
+  ['09 Nov', 'Movie night', -260],
+  ['11 Nov', 'Blinkit run', -340],
+  ['12 Nov', 'Bills coming up', -1005],
+]
+
+function Receipt() {
+  const root = useRef<HTMLElement>(null)
+  useLive(root, 'rc-live', (q) => {
+    const tl = gsap.timeline({ scrollTrigger: { trigger: q('.rc-slip')[0], start: 'top 80%', end: 'bottom 60%', scrub: 1 } })
+    tl.from(q('.rc-paper'), { clipPath: 'inset(0 0 100% 0)', ease: 'none', duration: 1 })
+      .from(q('.rc-line'), { autoAlpha: 0, x: -10, stagger: 0.08, duration: 0.2 }, 0.05)
+      .from(q('.rc-total'), { autoAlpha: 0, scale: 0.94, duration: 0.25 }, 0.8)
+  })
+  const left = SLIP.reduce((s, [, , a]) => s + a, 0)
+  return (
+    <section className="rc" ref={root} aria-label="The month on one slip">
+      <div className="rc-copy">
+        <Rise className="lx-h2">Your month, <span className="coral">on one slip</span></Rise>
+        <p className="lx-lede">
+          Money in, savings set aside, what you spent and the bills still to come.
+          What's left is split over the days remaining, so you know today's number.
+        </p>
+      </div>
+      <div className="rc-slip">
+        <div className="rc-paper">
+          <div className="rc-head">
+            <span>LEDGER</span>
+            <span>November · day 12</span>
+          </div>
+          {SLIP.map(([d, l, a]) => (
+            <div className="rc-line" key={l}>
+              <em>{d}</em>
+              <span>{l}</span>
+              <b className={a > 0 ? 'in' : ''}>{a > 0 ? '+' : '−'}{rs(Math.abs(a))}</b>
             </div>
           ))}
+          <div className="rc-rule" />
+          <div className="rc-line rc-sum"><em /> <span>Left to spend</span><b>{rs(left)}</b></div>
+          <div className="rc-line rc-sum"><em /> <span>Days left</span><b>19</b></div>
+          <div className="rc-total">
+            <span>Safe to spend today</span>
+            <b>{rs(Math.floor(left / 19))}</b>
+          </div>
+          <p className="rc-foot">No bank login. You type it in, it stays yours.</p>
         </div>
       </div>
     </section>
   )
 }
 
-/* ============================================================
-   FAN — three cards slide out from behind each other into a
-   tilted row (the phone's cards, up close)
-   ============================================================ */
-
-function Fan() {
-  const root = useRef<HTMLElement>(null)
-  useLive(root, 'fan-live', (q, desk) => {
-    const cards = q('.fan-card')
-    if (desk) {
-      gsap.fromTo(cards,
-        { x: (i: number) => (1 - i) * 320, y: 140, rotateY: 0, rotateZ: 0, scale: 0.82, autoAlpha: 0 },
-        {
-          x: 0, y: 0, scale: 1, autoAlpha: 1,
-          rotateY: (i: number) => [22, 0, -22][i],
-          rotateZ: (i: number) => [-2, 0, 2][i],
-          z: (i: number) => (i === 1 ? 60 : 0),
-          ease: 'none',
-          scrollTrigger: { trigger: root.current, start: 'top 85%', end: 'center 55%', scrub: 1 },
-        })
-    } else {
-      gsap.from(cards, { y: 60, autoAlpha: 0, duration: 1, ease: 'expo.out', stagger: 0.1, scrollTrigger: { trigger: root.current, start: 'top 80%', once: true } })
-    }
-  })
-  return (
-    <section className="fan" ref={root} aria-label="What Ledger shows you">
-      <div className="fan-row">
-        <article className="fan-card lx-card">
-          <span className="lc-k">Recurring</span>
-          <p className="lc-t">3 payments in the next 3 weeks</p>
-          {[['Netflix split', 'Tomorrow', 199], ['Spotify duet', '14 Nov', 149], ['Hostel rent', '1 Dec', 6500]].map(([n, d, a]) => (
-            <div className="lc-row" key={n as string}><span>{n}<em>{d}</em></span><b>{rs(a as number)}</b></div>
-          ))}
-        </article>
-        <article className="fan-card lx-card">
-          <span className="lc-k">Where it went · November</span>
-          {[['Food & drinks', 627, 39, '#ff6f5e'], ['Shopping', 415, 26, '#e8908a'], ['Transport', 303, 19, '#d9a441'], ['Entertainment', 265, 16, '#b07aa1']].map(([l, a, p, c], i) => (
-            <div className="lc-rank" key={l as string}>
-              <span><i style={{ background: c as string }} />{l}</span>
-              <em>{p}%</em><b>{rs(a as number)}</b>
-              <span className="lc-track"><span style={{ width: `${((a as number) / 627) * 100}%`, background: i === 0 ? '#e0523d' : undefined }} /></span>
-            </div>
-          ))}
-        </article>
-        <article className="fan-card lx-card">
-          <span className="lc-k">Goals</span>
-          {[['Laptop fund', 18000, 45000], ['Goa trip', 4200, 12000], ['Emergency cushion', 9000, 10000]].map(([n, s, t]) => (
-            <div className="lc-goal" key={n as string}>
-              <span>{n}<em>{rs(s as number)} of {rs(t as number)}</em></span>
-              <span className="lc-track"><span style={{ width: `${((s as number) / (t as number)) * 100}%` }} /></span>
-            </div>
-          ))}
-        </article>
-      </div>
-    </section>
-  )
-}
 
 /* ============================================================
    STATEMENT — words fill in as you scroll
@@ -831,27 +851,19 @@ function More() {
    ============================================================ */
 
 function Closing({ onDemo }: { onDemo: () => void }) {
-  const root = useRef<HTMLElement>(null)
-  useLive(root, 'cl-live', (q) => {
-    gsap.from(q('.tile.on'), {
-      scaleY: 0, transformOrigin: '50% 100%', ease: 'none', stagger: { each: 0.015, from: 'end', grid: [TILE_ROWS, TILE_COLS], axis: 'y' },
-      scrollTrigger: { trigger: root.current, start: 'top 80%', end: 'bottom bottom', scrub: 1 },
-    })
-  })
   return (
-    <section className="cl" ref={root}>
+    <section className="cl">
       <Rise className="lx-h1">Start with <span className="coral">what you have</span></Rise>
       <p className="lx-lede">Free for students. No card, no bank login.</p>
       <div className="h-ctas">
         <Link to="/signup" className="lx-btn lx-btn-coral">Get started</Link>
         <button type="button" className="lx-btn lx-btn-line" onClick={onDemo}>Try the demo</button>
       </div>
-      <div className="h-tiles cl-tiles" aria-hidden="true" style={{ gridTemplateColumns: `repeat(${TILE_COLS}, 1fr)` }}>
-        {TILES.map((t, i) => <span key={i} className={`tile ${t ? `on t-${t}` : ''}`} />)}
-      </div>
+      <Tide className="cl-tide" />
     </section>
   )
 }
+
 
 function Footer({ onDemo }: { onDemo: () => void }) {
   return (
@@ -890,7 +902,7 @@ export default function Landing() {
       <Nav onDemo={runDemo} />
       <main>
         <Hero onDemo={runDemo} />
-        <Fan />
+        <Receipt />
         <Statement />
         <Jars />
         <Features />
