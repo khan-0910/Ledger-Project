@@ -415,10 +415,10 @@ function Statement() {
   return (
     <section className="st" ref={root}>
       <p className="st-text">
-        Your ledger is <span className="coral">encrypted before it's stored.</span> No ads, no bank logins,
-        no tracking scripts, and not a single number sold.
+        Chai, a metro top-up, one more late-night order. <span className="coral">Small spends add up quietly.</span> Ledger
+        keeps count, so the last week of the month feels like the first.
       </p>
-      <p className="st-note">Encrypted in your browser with AES-256-GCM. <Link to="/privacy">Read the privacy page</Link></p>
+      <p className="st-note">Built for pocket money, stipends and first salaries. <Link to="/signup">Start your ledger</Link></p>
     </section>
   )
 }
